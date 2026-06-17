@@ -21,9 +21,21 @@ import PlacesCheckinScreen from "./src/screens/PlacesCheckin/PlacesCheckin";
 import NearbyEventsScreen from "./src/screens/NearbyEvents/NearbyEvents";
 import ExploreMapEventsScreen from "./src/screens/ExploreMapEvents/ExploreMapEvents";
 import CreatePostScreen from "./src/screens/CreatePost/CreatePost";
+import LoginScreen from "./src/screens/Login/Login";
+import RegisterScreen from "./src/screens/Register/Register";
+import ForgotPasswordScreen from "./src/screens/ForgotPassword/ForgotPassword";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+// Auth Stack
+const AuthStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
+    <Stack.Screen name="Login" component={LoginScreen} />
+    <Stack.Screen name="Register" component={RegisterScreen} />
+    <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+  </Stack.Navigator>
+);
 
 // Custom Tab Bar Button for Create Post
 const CustomTabBarButton = ({ navigation }) => (
@@ -154,7 +166,7 @@ const AppStack = () => (
 
 // Root Navigator
 export default function App() {
-  const { loading } = useAuth(); // Auth flow is now bypassed (Login screen deleted)
+  const { user, loading } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
 
   if (loading) {
@@ -171,7 +183,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <NavigationContainer>
-          <AppStack />
+          {user ? <AppStack /> : <AuthStack />}
         </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>

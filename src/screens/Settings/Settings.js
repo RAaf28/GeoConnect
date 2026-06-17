@@ -195,6 +195,18 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 <span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
 </div>
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('openPrivacySettings')">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">lock</span>
+</div>
+<div>
+<p class="font-bold text-on-surface">Privacy Settings</p>
+<p class="text-on-surface-variant text-[12px]">Manage your data and privacy</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</div>
 </div>
 </div>
 <!-- Preferences Section -->
@@ -296,7 +308,7 @@ const htmlContent = `<!DOCTYPE html>
     </script>
 </body></html>`;
 
-export default function Settings() {
+export default function Settings({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
@@ -305,6 +317,11 @@ export default function Settings() {
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onMessage={(event) => {
+          if (event.nativeEvent.data === 'openPrivacySettings') {
+            navigation.navigate('PrivacySettings');
+          }
+        }}
       />
     </SafeAreaView>
   );

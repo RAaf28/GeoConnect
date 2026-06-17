@@ -155,7 +155,7 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 <div class="flex items-center gap-4">
 <button class="material-symbols-outlined p-2 rounded-full hover:bg-surface-variant/50 transition-colors" data-icon="search">search</button>
-<button class="material-symbols-outlined p-2 rounded-full hover:bg-surface-variant/50 transition-colors" data-icon="more_vert">more_vert</button>
+<button class="material-symbols-outlined p-2 rounded-full hover:bg-surface-variant/50 transition-colors" data-icon="settings" onclick="window.ReactNativeWebView.postMessage('openSettings')">settings</button>
 </div>
 </header>
 <main class="pt-20 pb-4 max-w-4xl mx-auto px-margin-page">
@@ -293,7 +293,7 @@ const htmlContent = `<!DOCTYPE html>
     </script>
 </body></html>`;
 
-export default function Profile() {
+export default function Profile({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
@@ -302,6 +302,11 @@ export default function Profile() {
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onMessage={(event) => {
+          if (event.nativeEvent.data === 'openSettings') {
+            navigation.navigate('Settings');
+          }
+        }}
       />
     </SafeAreaView>
   );

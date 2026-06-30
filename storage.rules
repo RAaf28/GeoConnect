@@ -1,0 +1,91 @@
+rules_version = '2';
+
+// ============================================================
+// GeoConnect — Firebase Storage Security Rules
+// ============================================================
+// Path structure:
+//   /posts/{userId}/{fileName}      — foto post
+//   /profiles/{userId}/{fileName}   — foto profil
+//   /venues/{venueId}/{fileName}    — foto venue
+//   /events/{eventId}/{fileName}    — foto cover event
+// ============================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Validasi tipe file gambar
+    function isImageFile() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Maksimum ukuran file: 10MB
+    function isUnderSizeLimit() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // ==========================================
+    // /posts/{userId}/{fileName}
+    // ==========================================
+    // Foto post — hanya pemilik yang bisa upload/delete
+    // Semua user yang login bisa lihat
+    match /posts/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && request.auth.uid == userId
+        && isImageFile()
+        && isUnderSizeLimit();
+      allow delete: if isAuthenticated()
+        && request.auth.uid == userId;
+    }
+
+    // ==========================================
+    // /profiles/{userId}/{fileName}
+    // ==========================================
+    // Foto profil — hanya pemilik yang bisa upload/delete
+    // Semua user yang login bisa lihat
+    match /profiles/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && request.auth.uid == userId
+        && isImageFile()
+        && isUnderSizeLimit();
+      allow delete: if isAuthenticated()
+        && request.auth.uid == userId;
+    }
+
+    // ==========================================
+    // /venues/{venueId}/{fileName}
+    // ==========================================
+    // Foto venue — semua user yang login bisa upload
+    // Semua user yang login bisa lihat
+    match /venues/{venueId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && isImageFile()
+        && isUnderSizeLimit();
+      // Hanya user yang upload (fileName contains userId) bisa delete
+      allow delete: if isAuthenticated();
+    }
+
+    // ==========================================
+    // /events/{eventId}/{fileName}
+    // ==========================================
+    // Foto event — semua user yang login bisa upload
+    // Semua user yang login bisa lihat
+    match /events/{eventId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && isImageFile()
+        && isUnderSizeLimit();
+      allow delete: if isAuthenticated();
+    }
+  }
+}

@@ -1,18 +1,66 @@
-// ponytail: naive geohash encoder using simple grid approach
-// Upgrade to proper GeoHash library (geohash2) if precision > 9 or querying becomes bottleneck
-import { calculateHash } from "geofire-common";
+// GeoHash utilities using geofire-common for geospatial queries
+// geohashQueryBounds returns multiple [start, end] bounds for proper radius coverage
+import { geohashQueryBounds, distanceBetween, geohashForLocation } from "geofire-common";
 
+/**
+ * Encode koordinat ke GeoHash string
+ * @param {number} latitude
+ * @param {number} longitude
+ * @param {number} precision - panjang hash (default 9 = ~5m presisi)
+ * @returns {string} geohash
+ */
 export const encodeGeoHash = (latitude, longitude, precision = 9) => {
   try {
-    return calculateHash([latitude, longitude]).substring(0, precision);
+    return geohashForLocation([latitude, longitude], precision);
   } catch (error) {
     console.error("GeoHash encode error:", error);
     return "";
   }
 };
 
+/**
+ * Hitung GeoHash query bounds untuk radius tertentu.
+ * Mengembalikan array pasangan [start, end] yang mencakup area dalam radius.
+ *
+ * Ini adalah cara BENAR untuk melakukan radius query di Firestore dengan GeoHash —
+ * satu prefix query saja bisa miss hasil di boundary hash yang berbeda.
+ *
+ * @param {number} latitude  - center lat
+ * @param {number} longitude - center lng
+ * @param {number} radiusKm  - radius dalam kilometer
+ * @returns {Array<[string, string]>} array of [startHash, endHash] bounds
+ */
+export const getGeoHashBounds = (latitude, longitude, radiusKm) => {
+  try {
+    const radiusMeters = radiusKm * 1000;
+    const bounds = geohashQueryBounds([latitude, longitude], radiusMeters);
+    return bounds;
+  } catch (error) {
+    console.error("GeoHash bounds error:", error);
+    return [];
+  }
+};
+
+/**
+ * Hitung jarak antara dua titik menggunakan geofire-common (lebih akurat)
+ * @param {number} lat1
+ * @param {number} lng1
+ * @param {number} lat2
+ * @param {number} lng2
+ * @returns {number} jarak dalam km
+ */
+export const geoDistance = (lat1, lng1, lat2, lng2) => {
+  try {
+    // distanceBetween returns km
+    return distanceBetween([lat1, lng1], [lat2, lng2]);
+  } catch (error) {
+    console.error("geoDistance error:", error);
+    return Infinity;
+  }
+};
+
 export const decodeGeoHashRange = (geoHash) => {
-  // Returns a range prefix for Firestore query
+  // Returns a range prefix for Firestore query (legacy simple approach)
   return {
     start: geoHash,
     end: geoHash + "z",

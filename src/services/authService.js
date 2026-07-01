@@ -89,22 +89,6 @@ export const getCurrentUser = () => {
   return auth.currentUser;
 };
 
-// Update user profile (displayName and photoURL)
-export const updateUserProfile = async (displayName, photoURL) => {
-  try {
-    const user = auth.currentUser;
-    if (!user) throw new Error('No user logged in');
-
-    await updateProfile(user, {
-      displayName: displayName || null,
-      photoURL: photoURL || null,
-    });
-
-    return user;
-  } catch (error) {
-    throw error;
-  }
-};
 
 // Send password reset email
 export const sendPasswordReset = async (email) => {

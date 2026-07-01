@@ -14,6 +14,7 @@ import {
   limit as firestoreLimit,
   increment,
   Timestamp,
+  onSnapshot
 } from "firebase/firestore";
 import { firestore } from "./firebase";
 
@@ -288,6 +289,24 @@ export const getAllPosts = async (maxResults = 20) => {
 };
 
 /**
+ * Subscribe to all posts for the feed.
+ * @param {number} maxResults
+ * @param {Function} onUpdate - Callback with list of posts
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToPosts = (maxResults = 20, onUpdate) => {
+  const q = query(
+    collection(firestore, "posts"),
+    orderBy("createdAt", "desc"),
+    firestoreLimit(maxResults)
+  );
+  return onSnapshot(q, (querySnapshot) => {
+    const posts = querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+    onUpdate(posts);
+  });
+};
+
+/**
  * Get posts near a location using GeoHash range query.
  * @param {string} geoHashPrefix - GeoHash prefix for range query
  * @param {number} maxResults - Maximum number of posts to return
@@ -306,6 +325,26 @@ export const getPostsNearby = async (geoHashPrefix, maxResults = 50) => {
   } catch (error) {
     throw error;
   }
+};
+
+/**
+ * Subscribe to posts near a location.
+ * @param {string} geoHashPrefix 
+ * @param {number} maxResults 
+ * @param {Function} onUpdate 
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToPostsNearby = (geoHashPrefix, maxResults = 50, onUpdate) => {
+  const q = query(
+    collection(firestore, "posts"),
+    where("geoHash", ">=", geoHashPrefix),
+    where("geoHash", "<", geoHashPrefix + "\uf8ff"),
+    firestoreLimit(maxResults)
+  );
+  return onSnapshot(q, (querySnapshot) => {
+    const posts = querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+    onUpdate(posts);
+  });
 };
 
 /**
@@ -586,6 +625,43 @@ export const getEvent = async (eventId) => {
 };
 
 /**
+ * Get all events for the feed, ordered by most recent.
+ * @param {number} maxResults
+ * @returns {Array} List of event objects
+ */
+export const getAllEvents = async (maxResults = 20) => {
+  try {
+    const q = query(
+      collection(firestore, "events"),
+      orderBy("createdAt", "desc"),
+      firestoreLimit(maxResults),
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Subscribe to all events for the feed.
+ * @param {number} maxResults
+ * @param {Function} onUpdate
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToEvents = (maxResults = 20, onUpdate) => {
+  const q = query(
+    collection(firestore, "events"),
+    orderBy("createdAt", "desc"),
+    firestoreLimit(maxResults)
+  );
+  return onSnapshot(q, (querySnapshot) => {
+    const events = querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+    onUpdate(events);
+  });
+};
+
+/**
  * Get events near a location using GeoHash range query.
  * @param {string} geoHashPrefix
  * @returns {Array} List of event objects
@@ -602,6 +678,24 @@ export const getEventsNearby = async (geoHashPrefix) => {
   } catch (error) {
     throw error;
   }
+};
+
+/**
+ * Subscribe to events near a location.
+ * @param {string} geoHashPrefix
+ * @param {Function} onUpdate
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToEventsNearby = (geoHashPrefix, onUpdate) => {
+  const q = query(
+    collection(firestore, "events"),
+    where("geoHash", ">=", geoHashPrefix),
+    where("geoHash", "<", geoHashPrefix + "\uf8ff")
+  );
+  return onSnapshot(q, (querySnapshot) => {
+    const events = querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
+    onUpdate(events);
+  });
 };
 
 /**

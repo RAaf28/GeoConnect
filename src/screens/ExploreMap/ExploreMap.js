@@ -17,7 +17,7 @@ import { Image } from 'expo-image';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, useLocationStore } from '../../store/stores';
 import { useWatchLocation, useLocationPermission } from '../../hooks/useLocation';
-import { getPostsNearby, getUserProfile } from '../../services/firestoreService';
+import { subscribeToPostsNearby, subscribeToEventsNearby, getUserProfile } from '../../services/firestoreService';
 import { encodeGeoHash, getGeoHashPrecisionForRadius } from '../../utils/geoUtils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -66,7 +66,7 @@ const PostCard = React.memo(({ post, onPress, isDark }) => {
   return (
     <TouchableOpacity
       style={[styles.postCard, isDark && styles.postCardDark]}
-      onPress={() => onPress(post.id)}
+      onPress={() => onPress(post.id, post.type)}
       activeOpacity={0.7}
     >
       {post.imageURL ? (
@@ -81,13 +81,13 @@ const PostCard = React.memo(({ post, onPress, isDark }) => {
       ) : null}
       <View style={styles.postContent}>
         <Text style={[styles.postCategory, isDark && styles.textLight]}>
-          {post.locationLabel || 'Nearby'}
+          {post.type === 'event' ? (post.category || 'Event') : (post.locationLabel || 'Nearby')}
         </Text>
         <Text
           style={[styles.postCaption, isDark && styles.textWhite]}
           numberOfLines={2}
         >
-          {(post.caption || '').substring(0, 80)}
+          {post.type === 'event' ? post.title : (post.caption || '').substring(0, 80)}
         </Text>
         <View style={styles.postAuthorRow}>
           {post.authorPhoto ? (
@@ -117,7 +117,7 @@ const PostMarker = React.memo(({ post }) => {
   return (
     <Marker
       coordinate={{ latitude: post.lat, longitude: post.lng }}
-      title={post.caption?.substring(0, 40) || 'Post'}
+      title={post.type === 'event' ? post.title : (post.caption?.substring(0, 40) || 'Post')}
       description={post.authorName || 'Explorer'}
     >
       <View style={styles.markerContainer}>
@@ -150,6 +150,8 @@ export default function ExploreMap({ navigation }) {
 
   // State
   const [posts, setPosts] = useState([]);
+  const [rawPosts, setRawPosts] = useState([]);
+  const [rawEvents, setRawEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [radiusIndex, setRadiusIndex] = useState(1); // default 1km
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -202,50 +204,70 @@ export default function ExploreMap({ navigation }) {
     setSheetOpen(!sheetOpen);
   }, [sheetOpen, sheetAnim]);
 
-  // Load nearby posts
-  const loadNearbyPosts = useCallback(async (radiusKm) => {
-    try {
-      if (!hasLocationPermission || lat == null || lng == null) {
-        setPosts([]);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      const precision = getGeoHashPrecisionForRadius(radiusKm);
-      const geoHashPrefix = encodeGeoHash(lat, lng, precision);
-      const rawPosts = await getPostsNearby(geoHashPrefix, 20);
-
-      const enriched = await Promise.all(
-        rawPosts.map(async (post) => {
-          try {
-            const author = await getUserProfile(post.authorId);
-            return {
-              ...post,
-              authorName: author?.displayName || 'Explorer',
-              authorPhoto: author?.photoURL || '',
-            };
-          } catch (e) {
-            return { ...post, authorName: 'Explorer', authorPhoto: '' };
-          }
-        })
-      );
-
-      setPosts(enriched);
-    } catch (error) {
-      console.error('[ExploreMap] Error loading posts:', error);
-      setPosts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [lat, lng, hasLocationPermission]);
-
-  // Load posts when location changes
+  // Subscribe to posts and events when location changes
   useEffect(() => {
-    if (lat != null && lng != null && !locationError) {
-      loadNearbyPosts(currentRadiusKm);
+    if (!hasLocationPermission || lat == null || lng == null || locationError) {
+      setRawPosts([]);
+      setRawEvents([]);
+      setLoading(false);
+      return;
     }
-  }, [lat, lng, locationError, currentRadiusKm, loadNearbyPosts]);
+
+    setLoading(true);
+    const precision = getGeoHashPrecisionForRadius(currentRadiusKm);
+    const geoHashPrefix = encodeGeoHash(lat, lng, precision);
+
+    const unsubPosts = subscribeToPostsNearby(geoHashPrefix, 20, (postsData) => {
+      setRawPosts(postsData);
+    });
+
+    const unsubEvents = subscribeToEventsNearby(geoHashPrefix, (eventsData) => {
+      setRawEvents(eventsData);
+    });
+
+    return () => {
+      unsubPosts();
+      unsubEvents();
+    };
+  }, [lat, lng, currentRadiusKm, hasLocationPermission, locationError]);
+
+  // Enrich data whenever raw data changes
+  useEffect(() => {
+    const enrichData = async () => {
+      try {
+        const typedPosts = rawPosts.map(p => ({ ...p, type: 'post' }));
+        const typedEvents = rawEvents.map(e => ({ ...e, type: 'event' }));
+        
+        const combined = [...typedPosts, ...typedEvents].sort((a, b) => {
+          const timeA = a.createdAt?.seconds || 0;
+          const timeB = b.createdAt?.seconds || 0;
+          return timeB - timeA;
+        }).slice(0, 20);
+
+        const enriched = await Promise.all(
+          combined.map(async (post) => {
+            try {
+              const authorId = post.authorId || post.creatorId;
+              const author = await getUserProfile(authorId);
+              return {
+                ...post,
+                authorName: author?.displayName || 'Explorer',
+                authorPhoto: author?.photoURL || '',
+              };
+            } catch (e) {
+              return { ...post, authorName: 'Explorer', authorPhoto: '' };
+            }
+          })
+        );
+        setPosts(enriched);
+      } catch (error) {
+        console.error('[ExploreMap] Error enriching posts:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    enrichData();
+  }, [rawPosts, rawEvents]);
 
   // Animate map to new region when location or radius changes
   useEffect(() => {
@@ -260,8 +282,12 @@ export default function ExploreMap({ navigation }) {
   }, []);
 
   // Handle post press
-  const handlePostPress = useCallback((postId) => {
-    navigation.navigate('PostDetail', { postId });
+  const handlePostPress = useCallback((postId, type) => {
+    if (type === 'event') {
+      navigation.navigate('EventDetail', { eventId: postId });
+    } else {
+      navigation.navigate('PostDetail', { postId });
+    }
   }, [navigation]);
 
   // Handle marker press — open story viewer for posts
@@ -275,13 +301,13 @@ export default function ExploreMap({ navigation }) {
     }
   }, [filteredPosts, navigation]);
 
-  // Filtered posts based on search
   const filteredPosts = useMemo(() => {
     if (!searchQuery.trim()) return posts;
     const q = searchQuery.toLowerCase();
     return posts.filter(
       (p) =>
         (p.caption || '').toLowerCase().includes(q) ||
+        (p.title || '').toLowerCase().includes(q) ||
         (p.authorName || '').toLowerCase().includes(q) ||
         (p.locationLabel || '').toLowerCase().includes(q)
     );

@@ -1,10 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, useFeedStore } from '../../store/stores';
-import { getAllPosts, getUserProfile, likePost, unlikePost, hasLikedPost } from '../../services/firestoreService';
+import { subscribeToPosts, subscribeToEvents, getUserProfile, likePost, unlikePost, hasLikedPost } from '../../services/firestoreService';
 
 const getHtmlContent = (isDark) => {
   return `<!DOCTYPE html><html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
@@ -232,7 +232,10 @@ const getHtmlContent = (isDark) => {
                             '<button class="text-on-surface dark:text-inverse-on-surface hover:text-primary transition-colors"><span class="material-symbols-outlined text-[24px]">bookmark</span></button>' +
                         '</div>' +
                         '<div class="space-y-1">' +
-                            (post.caption ? '<p class="text-body-md font-body-md text-on-surface dark:text-inverse-on-surface"><span class="font-bold">' + authorName + '</span> ' + post.caption + '</p>' : '') +
+                            (post.type === 'event' 
+                                ? '<div class="mb-2"><span class="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider mb-1">' + (post.category || 'Event') + '</span><h4 class="font-headline-md text-[16px] leading-tight text-on-surface dark:text-inverse-on-surface">' + (post.title || '') + '</h4><p class="text-body-md font-body-md text-muted-zinc mt-1">' + (post.description || '') + '</p></div>' 
+                                : (post.caption ? '<p class="text-body-md font-body-md text-on-surface dark:text-inverse-on-surface"><span class="font-bold">' + authorName + '</span> ' + post.caption + '</p>' : '')
+                            ) +
                             (commentCount > 0 ? '<button onclick="openPost(\\'' + post.id + '\\')" class="text-technical-label font-technical-label text-muted-zinc hover:text-primary transition-colors">View all ' + commentCount + ' comments</button>' : '') +
                         '</div>' +
                     '</div>' +
@@ -307,6 +310,9 @@ export default function Feed({ navigation }) {
   const isDark = useThemeStore((state) => state.isDark);
   const { setPosts, likePostLocal, unlikePostLocal } = useFeedStore();
   const webViewRef = useRef(null);
+  const [webViewReady, setWebViewReady] = useState(false);
+  const rawPostsRef = useRef([]);
+  const rawEventsRef = useRef([]);
 
   // Sync Dark/Light Mode
   useEffect(() => {
@@ -316,38 +322,81 @@ export default function Feed({ navigation }) {
     `);
   }, [isDark]);
 
+  const enrichAndRender = useCallback(async () => {
+    if (!webViewReady) return;
+    try {
+      const posts = rawPostsRef.current || [];
+      const events = rawEventsRef.current || [];
+      
+      const typedPosts = posts.map(p => ({ ...p, type: 'post' }));
+      const typedEvents = events.map(e => ({ ...e, type: 'event' }));
+      
+      const combined = [...typedPosts, ...typedEvents].sort((a, b) => {
+        const timeA = a.createdAt?.seconds || 0;
+        const timeB = b.createdAt?.seconds || 0;
+        return timeB - timeA;
+      }).slice(0, 20);
+      
+      const enrichedPosts = await Promise.all(
+        combined.map(async (item) => {
+          try {
+            const authorId = item.authorId || item.creatorId;
+            const author = await getUserProfile(authorId);
+            let liked = false;
+            if (item.type === 'post') {
+              liked = user ? await hasLikedPost(item.id, user.uid) : false;
+            }
+            return {
+              ...item,
+              authorName: author?.displayName || 'Explorer',
+              authorPhoto: author?.photoURL || '',
+              isLiked: liked,
+            };
+          } catch (e) {
+            return {
+              ...item,
+              authorName: 'Explorer',
+              authorPhoto: '',
+              isLiked: false,
+            };
+          }
+        })
+      );
+
+      setPosts(enrichedPosts);
+      webViewRef.current?.injectJavaScript(`renderPosts(${JSON.stringify(enrichedPosts)}); true;`);
+    } catch (error) {
+      console.error('[Feed] Failed to load feed:', error);
+      webViewRef.current?.injectJavaScript(`
+        document.getElementById('feedContainer').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-error text-4xl">error</span><p class="text-on-surface-variant dark:text-inverse-on-surface font-bold text-lg">Failed to load feed</p><p class="text-muted-zinc text-sm">Please pull to refresh</p></div>';
+        true;
+      `);
+    }
+  }, [user, webViewReady, setPosts]);
+
+  useEffect(() => {
+    const unsubPosts = subscribeToPosts(20, (posts) => {
+      rawPostsRef.current = posts;
+      enrichAndRender();
+    });
+    const unsubEvents = subscribeToEvents(20, (events) => {
+      rawEventsRef.current = events;
+      enrichAndRender();
+    });
+    return () => {
+      unsubPosts();
+      unsubEvents();
+    };
+  }, [enrichAndRender]);
+
   const handleMessage = async (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
 
-      if (data.action === 'loadFeed' || data.action === 'refreshFeed') {
-        const posts = await getAllPosts(20);
-        
-        // Enrich posts with author profiles and like status
-        const enrichedPosts = await Promise.all(
-          posts.map(async (post) => {
-            try {
-              const author = await getUserProfile(post.authorId);
-              const liked = user ? await hasLikedPost(post.id, user.uid) : false;
-              return {
-                ...post,
-                authorName: author?.displayName || 'Explorer',
-                authorPhoto: author?.photoURL || '',
-                isLiked: liked,
-              };
-            } catch (e) {
-              return {
-                ...post,
-                authorName: 'Explorer',
-                authorPhoto: '',
-                isLiked: false,
-              };
-            }
-          })
-        );
-
-        setPosts(enrichedPosts);
-        webViewRef.current?.injectJavaScript(`renderPosts(${JSON.stringify(enrichedPosts)}); true;`);
+      if (data.action === 'loadFeed') {
+        setWebViewReady(true);
+      } else if (data.action === 'refreshFeed') {
+        enrichAndRender();
       }
       else if (data.action === 'likePost') {
         if (!user) {
@@ -363,11 +412,7 @@ export default function Feed({ navigation }) {
 
         try {
           await likePost(data.postId, user.uid);
-          // Reload feed to get accurate state
-          webViewRef.current?.injectJavaScript(`
-            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'loadFeed' }));
-            true;
-          `);
+          // UI will auto-update via subscription
         } catch (error) {
           // Rollback on failure
           unlikePostLocal(data.postId);
@@ -384,10 +429,7 @@ export default function Feed({ navigation }) {
 
         try {
           await unlikePost(data.postId, user.uid);
-          webViewRef.current?.injectJavaScript(`
-            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'loadFeed' }));
-            true;
-          `);
+          // UI will auto-update via subscription
         } catch (error) {
           likePostLocal(data.postId);
           console.error('[Feed] Unlike error:', error);

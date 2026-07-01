@@ -13,8 +13,7 @@ import { useAuthStore } from '../../store/stores';
 import { updateUserProfile } from '../../services/authService';
 import { updateUserProfile as updateFirestoreProfile } from '../../services/firestoreService';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator } from 'react-native-paper';
-import { StatusBar } from 'react-native';
+import { ActivityIndicator, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function EditProfile({ navigation }) {

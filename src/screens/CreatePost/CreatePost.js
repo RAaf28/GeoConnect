@@ -15,6 +15,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../hooks/useAuth';
@@ -28,6 +29,24 @@ import { Timestamp } from "firebase/firestore";
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const PLACE_CATEGORIES = ['Cafe', 'Park', 'Mall', 'Culture'];
+const EVENT_CATEGORIES = ['Arts & Culture', 'Nature Exploration', 'Local Meetup', 'Fitness Trails'];
+const DURATION_OPTIONS = [
+  { label: '1 Jam', hours: 1 },
+  { label: '2 Jam', hours: 2 },
+  { label: '3 Jam', hours: 3 },
+  { label: '4 Jam', hours: 4 },
+  { label: 'Seharian', hours: 12 },
+];
+
+// Helper: format time from Date object to display
+const formatTimeRangeDate = (dateObj, durationHours) => {
+  if (!dateObj) return '';
+  const startH = dateObj.getHours();
+  const startM = dateObj.getMinutes();
+  const endH = (startH + durationHours) % 24;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(startH)}:${pad(startM)} - ${pad(endH)}:${pad(startM)}`;
+};
 
 export default function CreatePost({ navigation }) {
   const { user } = useAuth();
@@ -46,8 +65,19 @@ export default function CreatePost({ navigation }) {
   // Event-specific state
   const [eventTitle, setEventTitle] = useState('');
   const [eventDescription, setEventDescription] = useState('');
-  const [eventDate, setEventDate] = useState(new Date());
-  const [eventTime, setEventTime] = useState(new Date());
+
+  const getTomorrow = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(12, 0, 0, 0);
+    return d;
+  };
+
+  const [eventDate, setEventDate] = useState(getTomorrow()); 
+  const [eventTime, setEventTime] = useState(getTomorrow()); 
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [eventDuration, setEventDuration] = useState(2); // hours
   const [eventCategory, setEventCategory] = useState('Arts & Culture');
   const [eventLat, setEventLat] = useState(null);
   const [eventLng, setEventLng] = useState(null);
@@ -151,6 +181,10 @@ export default function CreatePost({ navigation }) {
         Alert.alert('Missing Information', 'Please add a title and description for your event.');
         return;
       }
+      if (!eventDate || !eventTime) {
+        Alert.alert('Missing Information', 'Please set the date and time for your event.');
+        return;
+      }
     } else {
       // Post mode validation
       if (!caption.trim()) {
@@ -190,12 +224,12 @@ export default function CreatePost({ navigation }) {
 
       if (isCreatingEvent) {
         // Create event
-        // Combine date and time into start and end timestamps (2-hour duration by default)
+        // Combine date and time from picker objects
         const startDate = new Date(eventDate);
         startDate.setHours(eventTime.getHours(), eventTime.getMinutes(), 0, 0);
 
         const endDate = new Date(startDate);
-        endDate.setHours(endDate.getHours() + 2); // Default 2-hour event
+        endDate.setHours(endDate.getHours() + eventDuration);
 
         await createEvent(user.uid, {
           title: eventTitle.trim(),
@@ -204,6 +238,7 @@ export default function CreatePost({ navigation }) {
           category: eventCategory,
           startDate: Timestamp.fromDate(startDate),
           endDate: Timestamp.fromDate(endDate),
+          durationHours: eventDuration,
           geoHash,
           lat,
           lng,
@@ -239,7 +274,7 @@ export default function CreatePost({ navigation }) {
       setPosting(false);
       setUploadProgress(0);
     }
-  }, [selectedImageUri, caption, user, selectedPlace, currentLocation, navigation, isCreatingEvent, eventTitle, eventDescription, eventDate, eventTime, eventCategory]);
+  }, [selectedImageUri, caption, user, selectedPlace, currentLocation, navigation, isCreatingEvent, eventTitle, eventDescription, eventDate, eventTime, eventDuration, eventCategory]);
 
   // Filter places by search query
   const filteredPlaces = placeSearchQuery.trim()
@@ -329,23 +364,196 @@ export default function CreatePost({ navigation }) {
             )}
           </TouchableOpacity>
 
-          {/* Caption Input */}
-          <View style={[styles.captionContainer, isDark && styles.cardDark]}>
-            <TextInput
-              style={[styles.captionInput, isDark && styles.textWhite]}
-              placeholder="What did you discover? ✨"
-              placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
-              multiline
-              numberOfLines={4}
-              maxLength={500}
-              value={caption}
-              onChangeText={setCaption}
-              textAlignVertical="top"
-            />
-            <Text style={[styles.charCount, isDark && styles.textDimmed]}>
-              {caption.length}/500
-            </Text>
+          {/* Post / Event Toggle */}
+          <View style={[styles.toggleContainer, isDark && styles.cardDark]}>
+            <TouchableOpacity
+              style={[styles.toggleButton, !isCreatingEvent && styles.toggleButtonActive]}
+              onPress={() => setIsCreatingEvent(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.toggleButtonText, !isCreatingEvent && styles.toggleButtonTextActive]}>
+                📝 Post
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleButton, isCreatingEvent && styles.toggleButtonActive]}
+              onPress={() => setIsCreatingEvent(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.toggleButtonText, isCreatingEvent && styles.toggleButtonTextActive]}>
+                🎉 Event
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {/* Conditional Form: Post or Event */}
+          {isCreatingEvent ? (
+            <>
+              {/* Event Title */}
+              <View style={[styles.eventFieldContainer, isDark && styles.cardDark]}>
+                <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>EVENT TITLE</Text>
+                <TextInput
+                  style={[styles.eventFieldInput, isDark && styles.textWhite]}
+                  placeholder="Nama event kamu ✨"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
+                  maxLength={100}
+                  value={eventTitle}
+                  onChangeText={setEventTitle}
+                />
+              </View>
+
+              {/* Event Description */}
+              <View style={[styles.eventFieldContainer, isDark && styles.cardDark]}>
+                <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>DESKRIPSI</Text>
+                <TextInput
+                  style={[styles.eventFieldInput, styles.eventTextArea, isDark && styles.textWhite]}
+                  placeholder="Detail acara, apa yang perlu dibawa..."
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={1000}
+                  value={eventDescription}
+                  onChangeText={setEventDescription}
+                  textAlignVertical="top"
+                />
+                <Text style={[styles.charCount, isDark && styles.textDimmed]}>
+                  {eventDescription.length}/1000
+                </Text>
+              </View>
+
+              {/* Date & Time Row */}
+              <View style={styles.eventRow}>
+                <TouchableOpacity
+                  style={[styles.eventFieldContainer, isDark && styles.cardDark, { flex: 1, marginRight: 8 }]}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>📅 TANGGAL</Text>
+                  <Text style={[styles.eventFieldInput, isDark && styles.textWhite]}>
+                    {eventDate.toISOString().split('T')[0]}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.eventFieldContainer, isDark && styles.cardDark, { flex: 1, marginLeft: 8 }]}
+                  onPress={() => setShowTimePicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>🕐 WAKTU</Text>
+                  <Text style={[styles.eventFieldInput, isDark && styles.textWhite]}>
+                    {`${String(eventTime.getHours()).padStart(2, '0')}:${String(eventTime.getMinutes()).padStart(2, '0')}`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={eventDate}
+                  mode="date"
+                  display="default"
+                  minimumDate={(() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    d.setHours(0,0,0,0);
+                    return d;
+                  })()}
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(false);
+                    if (selectedDate) setEventDate(selectedDate);
+                  }}
+                />
+              )}
+              {showTimePicker && (
+                <DateTimePicker
+                  value={eventTime}
+                  mode="time"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    setShowTimePicker(false);
+                    if (selectedDate) setEventTime(selectedDate);
+                  }}
+                />
+              )}
+
+              {/* Duration Picker */}
+              <View style={[styles.eventFieldContainer, isDark && styles.cardDark]}>
+                <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>⏱️ DURASI</Text>
+                {eventTime && formatTimeRangeDate(eventTime, eventDuration) ? (
+                  <Text style={[styles.timeRangeDisplay, isDark && styles.textWhite]}>
+                    {formatTimeRangeDate(eventTime, eventDuration)}
+                  </Text>
+                ) : null}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.durationRow}
+                >
+                  {DURATION_OPTIONS.map((opt) => (
+                    <TouchableOpacity
+                      key={opt.hours}
+                      style={[
+                        styles.durationPill,
+                        eventDuration === opt.hours && styles.durationPillActive,
+                        isDark && eventDuration !== opt.hours && styles.durationPillDark,
+                      ]}
+                      onPress={() => setEventDuration(opt.hours)}
+                    >
+                      <Text style={[
+                        styles.durationPillText,
+                        eventDuration === opt.hours && styles.durationPillTextActive,
+                        isDark && eventDuration !== opt.hours && styles.durationPillTextDark,
+                      ]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Category Picker */}
+              <View style={[styles.eventFieldContainer, isDark && styles.cardDark]}>
+                <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>🏷️ KATEGORI</Text>
+                <View style={styles.eventCategoryContainer}>
+                  {EVENT_CATEGORIES.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.eventCategoryPill,
+                        eventCategory === cat && styles.eventCategoryPillActive,
+                        isDark && eventCategory !== cat && styles.eventCategoryPillDark,
+                      ]}
+                      onPress={() => setEventCategory(cat)}
+                    >
+                      <Text style={[
+                        styles.eventCategoryText,
+                        eventCategory === cat && styles.eventCategoryTextActive,
+                        isDark && eventCategory !== cat && styles.eventCategoryTextDark,
+                      ]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </>
+          ) : (
+            /* Caption Input (Post mode) */
+            <View style={[styles.captionContainer, isDark && styles.cardDark]}>
+              <TextInput
+                style={[styles.captionInput, isDark && styles.textWhite]}
+                placeholder="What did you discover? ✨"
+                placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
+                multiline
+                numberOfLines={4}
+                maxLength={500}
+                value={caption}
+                onChangeText={setCaption}
+                textAlignVertical="top"
+              />
+              <Text style={[styles.charCount, isDark && styles.textDimmed]}>
+                {caption.length}/500
+              </Text>
+            </View>
+          )}
 
           {/* Location Tag */}
           <TouchableOpacity
@@ -363,7 +571,7 @@ export default function CreatePost({ navigation }) {
               <Text style={[styles.locationSubtitle, isDark && styles.textDimmed]}>
                 {selectedPlace
                   ? selectedPlace.address || selectedPlace.category
-                  : 'Tag a nearby place to your post'}
+                  : isCreatingEvent ? 'Tag lokasi event' : 'Tag a nearby place to your post'}
               </Text>
             </View>
             {selectedPlace ? (
@@ -1024,6 +1232,156 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
+  },
+
+  // Post/Event Toggle
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 4,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: '#4648d4',
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  toggleButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  toggleButtonTextActive: {
+    color: '#ffffff',
+  },
+
+  // Event Form Fields
+  eventFieldContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  eventFieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: 8,
+  },
+  eventFieldInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#1b1b23',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.5)',
+    paddingVertical: 8,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  eventTextArea: {
+    minHeight: 80,
+    borderBottomWidth: 0,
+  },
+  eventRow: {
+    flexDirection: 'row',
+  },
+
+  // Time Range Display
+  timeRangeDisplay: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#4648d4',
+    textAlign: 'center',
+    marginBottom: 12,
+    letterSpacing: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+
+  // Duration Picker
+  durationRow: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  durationPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#e4e1ed',
+  },
+  durationPillDark: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  durationPillActive: {
+    backgroundColor: '#4648d4',
+  },
+  durationPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#464554',
+  },
+  durationPillTextDark: {
+    color: 'rgba(255,255,255,0.5)',
+  },
+  durationPillTextActive: {
+    color: '#ffffff',
+  },
+
+  // Event Category
+  eventCategoryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  eventCategoryPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: '#e4e1ed',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  eventCategoryPillDark: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  eventCategoryPillActive: {
+    backgroundColor: 'rgba(70, 72, 212, 0.12)',
+    borderColor: '#4648d4',
+  },
+  eventCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#464554',
+  },
+  eventCategoryTextDark: {
+    color: 'rgba(255,255,255,0.5)',
+  },
+  eventCategoryTextActive: {
+    color: '#4648d4',
+    fontWeight: '700',
   },
 
   // Text helpers

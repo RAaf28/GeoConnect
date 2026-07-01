@@ -3,7 +3,9 @@
     "name": "GeoConnect",
     "slug": "geoconnect",
     "version": "1.0.0",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.geoconnect.app",
@@ -41,7 +43,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow GeoConnect to access your location."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

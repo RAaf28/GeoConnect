@@ -176,7 +176,7 @@ const getHtmlContent = (user) => {
 <div class="staggered-entry delay-1">
 <h3 class="text-technical-label font-technical-label text-muted-zinc mb-3 px-1 uppercase tracking-widest">Account</h3>
 <div class="bg-surface-pure rounded-xl whisper-shadow divide-y divide-soft-border overflow-hidden">
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigatePersonalInformation')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
 <span class="material-symbols-outlined">person</span>
@@ -188,7 +188,7 @@ const getHtmlContent = (user) => {
 </div>
 <span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
 </div>
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigatePrivacy')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
 <span class="material-symbols-outlined">shield</span>
@@ -218,7 +218,7 @@ const getHtmlContent = (user) => {
 <div class="staggered-entry delay-2">
 <h3 class="text-technical-label font-technical-label text-muted-zinc mb-3 px-1 uppercase tracking-widest">Preferences</h3>
 <div class="bg-surface-pure rounded-xl whisper-shadow divide-y divide-soft-border overflow-hidden">
-<div class="p-4 flex items-center justify-between">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigateNotifications')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-tertiary-fixed/30 flex items-center justify-center text-tertiary">
 <span class="material-symbols-outlined">notifications_active</span>
@@ -233,7 +233,7 @@ const getHtmlContent = (user) => {
 <div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
 </div>
-<div class="p-4 flex items-center justify-between">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigateLocationSettings')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-tertiary-fixed/30 flex items-center justify-center text-tertiary">
 <span class="material-symbols-outlined">location_on</span>
@@ -264,12 +264,12 @@ const getHtmlContent = (user) => {
 <span>100 km</span>
 </div>
 <div class="mt-8 grid grid-cols-2 gap-3">
-<div class="p-4 rounded-xl border border-soft-border hover:border-primary/30 transition-colors group cursor-pointer">
+<div class="p-4 rounded-xl border border-soft-hover border-primary/30 transition-colors group cursor-pointer" onclick="window.ReactNativeWebView.postMessage('navigateMapTheme')">
 <span class="material-symbols-outlined text-primary mb-2">map</span>
 <p class="font-bold text-[14px]">Map Theme</p>
 <p class="text-[12px] text-on-surface-variant">Terrain High-Def</p>
 </div>
-<div class="p-4 rounded-xl border border-soft-border hover:border-primary/30 transition-colors group cursor-pointer">
+<div class="p-4 rounded-xl border border-soft-border hover:border-primary/30 transition-colors group cursor-pointer" onclick="window.ReactNativeWebView.postMessage('navigateOverlays')">
 <span class="material-symbols-outlined text-primary mb-2">layers</span>
 <p class="font-bold text-[14px]">Overlays</p>
 <p class="text-[12px] text-on-surface-variant">Social Heatmap</p>
@@ -328,9 +328,9 @@ export default function Settings({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <WebView 
+      <WebView
         ref={webViewRef}
-        source={{ html: getHtmlContent(user) }} 
+        source={{ html: getHtmlContent(user) }}
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
@@ -340,6 +340,23 @@ export default function Settings({ navigation }) {
           if (action === 'goBack') {
             navigation.goBack();
           } else if (action === 'openPrivacySettings') {
+            navigation.navigate('PrivacySettings');
+          } else if (action === 'navigateProfile') {
+            navigation.navigate('Profile');
+          } else if (action === 'navigatePersonalInformation') {
+            navigation.navigate('PersonalInformation');
+          } else if (action === 'navigatePrivacy') {
+            navigation.navigate('PrivacySettings');
+          } else if (action === 'navigateNotifications') {
+            navigation.navigate('Notifications');
+          } else if (action === 'navigateLocationSettings') {
+            // For now, navigate to PrivacySettings as a placeholder
+            navigation.navigate('PrivacySettings');
+          } else if (action === 'navigateMapTheme') {
+            // For now, navigate to PrivacySettings as a placeholder
+            navigation.navigate('PrivacySettings');
+          } else if (action === 'navigateOverlays') {
+            // For now, navigate to PrivacySettings as a placeholder
             navigation.navigate('PrivacySettings');
           } else if (action === 'performLogout') {
             try {

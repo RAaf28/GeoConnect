@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, useLocationStore } from '../../store/stores';
+import { useLocationPermission } from '../../hooks/useLocation';
 import { getNearbyPlaces } from '../../services/placesAPI';
 import { createCheckin, getCheckinsForVenue } from '../../services/firestoreService';
 
@@ -447,6 +448,15 @@ const getHtmlContent = (isDark) => {
 
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
+                // Check if we have location permission and data before loading places
+                if (!hasLocationPermission || lat === null || lng === null || lat === undefined || lng === undefined) {
+                    // Show error message in the places list
+                    const safeLocationError = (locationError || 'Location unavailable').replace(/'/g, "\\'");
+                    document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined text-3xl">error</span><p class="mt-2">' + safeLocationError + '</p></div>';
+                    document.getElementById('leaderboardList').innerHTML = '<div class="text-center text-muted-zinc py-4">Location unavailable</div>';
+                    return;
+                }
+
                 window.ReactNativeWebView.postMessage(JSON.stringify({
                     action: 'loadPlaces',
                     category: 'Cafe'
@@ -462,6 +472,23 @@ export default function PlacesCheckin() {
   const { currentLocation } = useLocationStore();
   const isDark = useThemeStore((state) => state.isDark);
   const webViewRef = useRef(null);
+
+  // Check/request location permissions
+  const locationPermission = useLocationPermission();
+
+  // Determine if we have permission and location
+  const hasLocationPermission = locationPermission === 'granted';
+  let locationError = null;
+  let lat, lng;
+
+  if (!hasLocationPermission) {
+    locationError = 'Location permission is required to show nearby places.';
+  } else if (!currentLocation) {
+    locationError = 'Unable to determine your location. Please ensure location services are enabled.';
+  } else {
+    lat = currentLocation?.latitude;
+    lng = currentLocation?.longitude;
+  }
 
   // Sync Dark/Light Mode
   useEffect(() => {
@@ -484,9 +511,27 @@ export default function PlacesCheckin() {
           try {
             const message = event.nativeEvent.data;
             const data = JSON.parse(message);
-            
-            const lat = currentLocation?.latitude || -6.324260;
-            const lng = currentLocation?.longitude || 106.791550;
+
+            // Check if we have location permission and data
+            if (!hasLocationPermission || lat === null || lng === null || lat === undefined || lng === undefined) {
+                // Show error for location-dependent actions
+                if (data.action === 'loadPlaces' || data.action === 'searchPlaces') {
+                    const safeLocationError = locationError.replace(/'/g, "\\'");
+                    webViewRef.current?.injectJavaScript(
+                        'document.getElementById(\'placesList\').innerHTML = \'<div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined text-3xl">error</span><p class="mt-2">' + safeLocationError + '</p></div>\'; document.getElementById(\'leaderboardList\').innerHTML = \'<div class="text-center text-muted-zinc py-4">Location unavailable</div>\'; true;'
+                    );
+                    return;
+                }
+                // For other actions that don't require location, we might still want to proceed
+                // but for now, let's block location-dependent ones
+                if (['loadPlaces', 'searchPlaces'].includes(data.action)) {
+                    return;
+                }
+            }
+
+            // Use the permission-checked latitude and longitude
+            const latitude = lat;
+            const longitude = lng;
 
             if (data.action === 'loadPlaces') {
               const results = await getNearbyPlaces(lat, lng, data.category);

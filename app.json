@@ -6,7 +6,10 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTabletMode": true,
-      "bundleIdentifier": "com.geoconnect.app"
+      "bundleIdentifier": "com.geoconnect.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyABWmd0g1FX7an1TcXmmo4Oqd9KOqmwYD8"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -14,6 +17,11 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.geoconnect.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyABWmd0g1FX7an1TcXmmo4Oqd9KOqmwYD8"
+        }
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",

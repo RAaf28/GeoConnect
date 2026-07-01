@@ -24,9 +24,12 @@ import CreatePostScreen from "./src/screens/CreatePost/CreatePost";
 import CreateEventScreen from "./src/screens/CreateEvent/CreateEvent";
 import EventDetailScreen from "./src/screens/EventDetail/EventDetail";
 import PostDetailScreen from "./src/screens/PostDetail/PostDetail";
+import StoryViewerScreen from "./src/screens/StoryViewer/StoryViewer";
 import LoginScreen from "./src/screens/Login/Login";
 import RegisterScreen from "./src/screens/Register/Register";
 import ForgotPasswordScreen from "./src/screens/ForgotPassword/ForgotPassword";
+import EditProfileScreen from "./src/screens/EditProfile/EditProfile";
+import PersonalInformationScreen from "./src/screens/PersonalInformation/PersonalInformation";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -173,7 +176,46 @@ const AppStack = () => (
     <Stack.Screen
       name="PostDetail"
       component={PostDetailScreen}
-      options={{ animation: "slide_from_right" }}
+      options={{ animation: "slide_from_right", headerShown: false }}
+    />
+    <Stack.Screen
+      name="StoryViewer"
+      component={StoryViewerScreen}
+      options={{ animation: "slide_from_right", headerShown: false }}
+    />
+    <Stack.Screen
+      name="Profile"
+      component={ProfileScreen}
+      options={({ navigation }) => ({
+        animation: "slide_from_right",
+        headerShown: true,
+        headerTitle: 'Profile',
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('EditProfile')}
+            style={{ padding: 16 }}
+          >
+            <Text style={{ color: '#4648d4', fontWeight: '600', fontSize: 16 }}>
+              Edit
+            </Text>
+          </TouchableOpacity>
+        ),
+      })}
+    />
+    <Stack.Screen
+      name="EditProfile"
+      component={EditProfileScreen}
+      options={{ animation: "slide_from_right", headerShown: false }}
+    />
+    <Stack.Screen
+      name="PersonalInformation"
+      component={PersonalInformationScreen}
+      options={{ animation: "slide_from_right", headerShown: false }}
+    />
+    <Stack.Screen
+      name="Notifications"
+      component={NotificationsScreen}
+      options={{ animation: "slide_from_right", headerShown: false }}
     />
   </Stack.Navigator>
 );

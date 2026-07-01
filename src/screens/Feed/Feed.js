@@ -154,6 +154,13 @@ const getHtmlContent = (isDark) => {
         <p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest">Loading feed...</p>
     </div>
 </div>
+<!-- Pull to Refresh Indicator -->
+<div id="pullIndicator" class="fixed top-16 left-0 right-0 z-[60] flex justify-center transition-all duration-300" style="opacity:0; transform: translateY(-40px);">
+    <div class="bg-primary text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+        <span class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+        <span class="text-xs font-bold">Refreshing...</span>
+    </div>
+</div>
 </main>
 
 <script>
@@ -253,6 +260,38 @@ const getHtmlContent = (isDark) => {
             if (countEl) countEl.textContent = newCount;
         }
 
+        // Pull to refresh support
+        let touchStartY = 0;
+        let isPulling = false;
+        document.addEventListener('touchstart', (e) => {
+            if (window.scrollY === 0) {
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        document.addEventListener('touchmove', (e) => {
+            if (window.scrollY === 0 && touchStartY > 0) {
+                const diff = e.touches[0].clientY - touchStartY;
+                if (diff > 80 && !isPulling) {
+                    isPulling = true;
+                    const indicator = document.getElementById('pullIndicator');
+                    indicator.style.opacity = '1';
+                    indicator.style.transform = 'translateY(0)';
+                }
+            }
+        }, { passive: true });
+        document.addEventListener('touchend', () => {
+            if (isPulling) {
+                isPulling = false;
+                window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'refreshFeed' }));
+                setTimeout(() => {
+                    const indicator = document.getElementById('pullIndicator');
+                    indicator.style.opacity = '0';
+                    indicator.style.transform = 'translateY(-40px)';
+                }, 1500);
+            }
+            touchStartY = 0;
+        }, { passive: true });
+
         // Load feed on page ready
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
@@ -281,7 +320,7 @@ export default function Feed({ navigation }) {
     try {
       const data = JSON.parse(event.nativeEvent.data);
 
-      if (data.action === 'loadFeed') {
+      if (data.action === 'loadFeed' || data.action === 'refreshFeed') {
         const posts = await getAllPosts(20);
         
         // Enrich posts with author profiles and like status

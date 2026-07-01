@@ -1,270 +1,551 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { StyleSheet, Alert } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  Platform,
+  Modal,
+  FlatList,
+  KeyboardAvoidingView,
+  Dimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
+import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, useLocationStore } from '../../store/stores';
-import { createPost } from '../../services/firestoreService';
+import { createPost, createEvent } from '../../services/firestoreService';
 import { uploadPostImage } from '../../services/storageService';
 import { encodeGeoHash } from '../../utils/geoUtils';
+import { getNearbyPlaces } from '../../services/placesAPI';
+import { Timestamp } from "firebase/firestore";
 
-const getHtmlContent = (isDark) => {
-  return `<!DOCTYPE html><html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<title>GeoConnect | Create Post</title>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                    "muted-zinc":"#64748B","surface-bright":"#fcf8ff","on-secondary":"#ffffff",
-                    "on-surface":"#1b1b23","surface-variant":"#e4e1ed","error":"#ba1a1a",
-                    "primary":"#4648d4","primary-container":"#6063ee","on-primary":"#ffffff",
-                    "on-surface-variant":"#464554","surface-container":"#efecf8",
-                    "surface-pure":"#FFFFFF","surface-dim":"#dbd8e4",
-                    "surface-container-highest":"#e4e1ed","soft-border":"rgba(226, 232, 240, 0.8)",
-                    "background":"#fcf8ff","inverse-on-surface":"#f2effb",
-                    "inverse-surface":"#303038","outline-variant":"#c7c4d7",
-                    "surface-container-low":"#f5f2fe","surface-container-high":"#e9e6f3",
-                    "surface":"#fcf8ff","tertiary":"#904900","on-error-container":"#93000a",
-                    "error-container":"#ffdad6","inverse-primary":"#c0c1ff","primary-fixed":"#e1e0ff",
-                    "outline":"#767586","surface-tint":"#494bd6","on-primary-container":"#fffbff",
-                    "secondary":"#565e74","on-background":"#1b1b23"
-            },
-            "borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},
-            "spacing":{"gutter-grid":"16px","margin-page":"24px","stack-gap":"12px","safe-area":"32px"},
-            "fontFamily":{"technical-label":["JetBrains Mono"],"headline-lg":["Plus Jakarta Sans"],"headline-lg-mobile":["Plus Jakarta Sans"],"body-lg":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"body-md":["Plus Jakarta Sans"]},
-            "fontSize":{"technical-label":["12px",{"lineHeight":"1.4","fontWeight":"500"}],"headline-md":["24px",{"lineHeight":"1.2","letterSpacing":"-0.01em","fontWeight":"700"}],"body-md":["14px",{"lineHeight":"1.6","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"1.6","fontWeight":"400"}]}
-          },
-        },
-      }
-    </script>
-<style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
-    </style>
-</head>
-<body class="bg-background dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface font-body-md min-h-screen">
-<!-- Header -->
-<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
-<button onclick="cancelPost()" class="p-2 rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
-<span class="material-symbols-outlined text-on-surface dark:text-inverse-on-surface">close</span>
-</button>
-<h1 class="text-headline-md font-headline-md text-primary tracking-tight">New Post</h1>
-<button id="postBtn" onclick="submitPost()" class="bg-primary text-on-primary px-5 py-2 rounded-full font-bold text-sm hover:-translate-y-px transition-all">Post</button>
-</header>
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-<main class="mt-20 px-margin-page max-w-2xl mx-auto space-y-6 pb-8">
-<!-- Image Upload Area -->
-<div id="imageArea" onclick="pickImage()" class="bg-surface-pure dark:bg-white/5 rounded-2xl border-2 border-dashed border-outline-variant dark:border-white/20 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-primary/50 transition-colors min-h-[200px]">
-    <span class="material-symbols-outlined text-4xl text-muted-zinc">add_photo_alternate</span>
-    <p class="text-muted-zinc font-bold">Tap to add a photo</p>
-    <p class="text-muted-zinc text-xs">Share your discovery with the world</p>
-</div>
-
-<!-- Caption Input -->
-<div class="bg-surface-pure dark:bg-white/5 rounded-xl whisper-shadow border border-soft-border dark:border-white/10 p-4">
-    <textarea id="captionInput" class="w-full bg-transparent border-none focus:ring-0 text-on-surface dark:text-inverse-on-surface placeholder-muted-zinc font-body-md resize-none outline-none" rows="4" placeholder="What did you discover? ✨"></textarea>
-</div>
-
-<!-- Location Tag -->
-<div id="locationTag" class="bg-surface-pure dark:bg-white/5 rounded-xl whisper-shadow border border-soft-border dark:border-white/10 p-4 flex items-center gap-3">
-    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-        <span class="material-symbols-outlined text-primary">location_on</span>
-    </div>
-    <div class="flex-1">
-        <p class="font-bold text-on-surface dark:text-inverse-on-surface text-sm">Add Location</p>
-        <p id="locationLabel" class="text-muted-zinc text-xs">Your current location will be tagged</p>
-    </div>
-    <span class="material-symbols-outlined text-outline-variant">chevron_right</span>
-</div>
-
-<!-- Posting indicator (hidden by default) -->
-<div id="postingOverlay" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center">
-    <div class="bg-surface-pure dark:bg-inverse-surface rounded-2xl p-8 flex flex-col items-center gap-4 whisper-shadow">
-        <span class="material-symbols-outlined text-primary animate-spin text-4xl">progress_activity</span>
-        <p class="font-bold text-on-surface dark:text-inverse-on-surface">Creating your post...</p>
-        <div id="uploadProgress" class="w-48 h-1.5 bg-surface-container rounded-full overflow-hidden">
-            <div id="progressBar" class="h-full bg-primary rounded-full transition-all" style="width: 0%"></div>
-        </div>
-    </div>
-</div>
-</main>
-
-<script>
-        let hasImage = false;
-
-        function cancelPost() {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'cancelPost' }));
-        }
-
-        function pickImage() {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'pickImage' }));
-        }
-
-        function setImagePreview(uri) {
-            const area = document.getElementById('imageArea');
-            area.innerHTML = '<img class="w-full rounded-xl object-cover max-h-[400px]" src="' + uri + '"><div class="absolute top-2 right-2 bg-black/50 backdrop-blur-md p-2 rounded-full cursor-pointer" onclick="event.stopPropagation(); pickImage();"><span class="material-symbols-outlined text-white text-sm">edit</span></div>';
-            area.classList.remove('border-dashed', 'p-8');
-            area.classList.add('relative', 'overflow-hidden', 'p-0');
-            hasImage = true;
-        }
-
-        function setLocationLabel(label) {
-            document.getElementById('locationLabel').textContent = label || 'Location tagged';
-        }
-
-        function submitPost() {
-            const caption = document.getElementById('captionInput').value.trim();
-            if (!hasImage && !caption) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'showError', message: 'Please add a photo or write a caption.' }));
-                return;
-            }
-            document.getElementById('postingOverlay').classList.remove('hidden');
-            document.getElementById('postBtn').disabled = true;
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                action: 'submitPost',
-                caption: caption
-            }));
-        }
-
-        function updateProgress(pct) {
-            document.getElementById('progressBar').style.width = pct + '%';
-        }
-
-        function onPostComplete() {
-            document.getElementById('postingOverlay').classList.add('hidden');
-            document.getElementById('postBtn').disabled = false;
-        }
-
-        function onPostError() {
-            document.getElementById('postingOverlay').classList.add('hidden');
-            document.getElementById('postBtn').disabled = false;
-        }
-    </script>
-</body></html>`;
-};
+const PLACE_CATEGORIES = ['Cafe', 'Park', 'Mall', 'Culture'];
 
 export default function CreatePost({ navigation }) {
   const { user } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
   const { currentLocation } = useLocationStore();
-  const webViewRef = useRef(null);
+
+  // Form state
   const [selectedImageUri, setSelectedImageUri] = useState(null);
+  const [caption, setCaption] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  useEffect(() => {
-    webViewRef.current?.injectJavaScript(`
-      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
-      true;
-    `);
-  }, [isDark]);
+  // Toggle between post and event creation
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
-  const handleMessage = async (event) => {
+  // Event-specific state
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventDate, setEventDate] = useState(new Date());
+  const [eventTime, setEventTime] = useState(new Date());
+  const [eventCategory, setEventCategory] = useState('Arts & Culture');
+  const [eventLat, setEventLat] = useState(null);
+  const [eventLng, setEventLng] = useState(null);
+  const [eventGeoHash, setEventGeoHash] = useState('');
+
+  // Location tagging state (shared between posts and events)
+  const [selectedPlace, setSelectedPlace] = useState(null);
+  const [showPlacePicker, setShowPlacePicker] = useState(false);
+  const [places, setPlaces] = useState([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('Cafe');
+  const [placeSearchQuery, setPlaceSearchQuery] = useState('');
+
+  // Pick image from gallery
+  const handlePickImage = useCallback(async () => {
     try {
-      const data = JSON.parse(event.nativeEvent.data);
-
-      if (data.action === 'cancelPost') {
-        navigation.goBack();
+      const permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permResult.granted) {
+        Alert.alert('Permission Needed', 'Please grant photo library access to upload images.');
+        return;
       }
-      else if (data.action === 'pickImage') {
-        const permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permResult.granted) {
-          Alert.alert('Permission Needed', 'Please grant photo library access to upload images.');
-          return;
-        }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [4, 5],
-          quality: 0.8,
-        });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 5],
+        quality: 0.8,
+      });
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          const uri = result.assets[0].uri;
-          setSelectedImageUri(uri);
-          webViewRef.current?.injectJavaScript(`setImagePreview('${uri}'); true;`);
-        }
-      }
-      else if (data.action === 'submitPost') {
-        if (!user) {
-          Alert.alert('Login Required', 'Please log in to create a post.');
-          webViewRef.current?.injectJavaScript(`onPostError(); true;`);
-          return;
-        }
-
-        // Create a promise that rejects after 15 seconds
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Post creation timeout')), 15000);
-        });
-
-        try {
-          // Race the submission against the timeout
-          await Promise.race([
-            (async () => {
-              let imageURL = '';
-              if (selectedImageUri) {
-                imageURL = await uploadPostImage(user.uid, selectedImageUri, (progress) => {
-                  webViewRef.current?.injectJavaScript(`updateProgress(${progress}); true;`);
-                });
-              }
-
-              const lat = currentLocation?.latitude || null;
-              const lng = currentLocation?.longitude || null;
-              const geoHash = (lat && lng) ? encodeGeoHash(lat, lng) : null;
-
-              await createPost(user.uid, {
-                caption: data.caption || '',
-                imageURL,
-                geoHash,
-                lat,
-                lng,
-                locationLabel: currentLocation ? 'Current Location' : '',
-              });
-            })(),
-            timeoutPromise
-          ]);
-
-          webViewRef.current?.injectJavaScript(`onPostComplete(); true;`);
-          Alert.alert('Success', 'Your post has been shared!', [
-            { text: 'OK', onPress: () => navigation.goBack() }
-          ]);
-        } catch (error) {
-          console.error('[CreatePost] Error creating post:', error);
-          webViewRef.current?.injectJavaScript(`onPostError(); true;`);
-          if (error.message === 'Post creation timeout') {
-            Alert.alert('Timeout', 'Post creation took too long. Please check your connection and try again.');
-          } else {
-            Alert.alert('Error', 'Failed to create post. Please try again.');
-          }
-        }
-      }
-      else if (data.action === 'showError') {
-        Alert.alert('Missing Content', data.message);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImageUri(result.assets[0].uri);
       }
     } catch (error) {
-      console.error('[CreatePost] Error handling message:', error);
+      console.error('[CreatePost] Image picker error:', error);
+      Alert.alert('Error', 'Failed to open image picker.');
     }
-  };
+  }, []);
+
+  // Load nearby places for the picker
+  const loadPlaces = useCallback(async (category) => {
+    if (!currentLocation) {
+      Alert.alert('Location Unavailable', 'Unable to determine your location for place tagging.');
+      return;
+    }
+
+    setPlacesLoading(true);
+    try {
+      const results = await getNearbyPlaces(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        category
+      );
+      setPlaces(results);
+    } catch (error) {
+      console.error('[CreatePost] Error loading places:', error);
+      setPlaces([]);
+    } finally {
+      setPlacesLoading(false);
+    }
+  }, [currentLocation]);
+
+  // Open place picker
+  const handleOpenPlacePicker = useCallback(() => {
+    setShowPlacePicker(true);
+    loadPlaces(selectedCategory);
+  }, [loadPlaces, selectedCategory]);
+
+  // Select a place
+  const handleSelectPlace = useCallback((place) => {
+    setSelectedPlace(place);
+    setShowPlacePicker(false);
+  }, []);
+
+  // Change category in place picker
+  const handleCategoryChange = useCallback((category) => {
+    setSelectedCategory(category);
+    loadPlaces(category);
+  }, [loadPlaces]);
+
+  // Remove selected place
+  const handleRemovePlace = useCallback(() => {
+    setSelectedPlace(null);
+  }, []);
+
+  // Submit post/event
+  const handleSubmit = useCallback(async () => {
+    // Validation
+    if (!selectedImageUri) {
+      Alert.alert('Missing Photo', 'Please add a photo for your post or event.');
+      return;
+    }
+
+    if (!user) {
+      Alert.alert('Login Required', 'Please log in to create a post or event.');
+      return;
+    }
+
+    // Additional validation for event mode
+    if (isCreatingEvent) {
+      if (!eventTitle.trim() || !eventDescription.trim()) {
+        Alert.alert('Missing Information', 'Please add a title and description for your event.');
+        return;
+      }
+    } else {
+      // Post mode validation
+      if (!caption.trim()) {
+        Alert.alert('Missing Caption', 'Please write a caption for your post.');
+        return;
+      }
+    }
+
+    setPosting(true);
+    setUploadProgress(0);
+
+    try {
+      // Upload image if selected
+      let imageURL = '';
+      if (selectedImageUri) {
+        imageURL = await uploadPostImage(user.uid, selectedImageUri, (progress) => {
+          setUploadProgress(progress);
+        });
+      }
+
+      // Determine location — prefer tagged place, fallback to current location
+      let lat = null;
+      let lng = null;
+      let locationLabel = '';
+
+      if (selectedPlace) {
+        lat = selectedPlace.latitude;
+        lng = selectedPlace.longitude;
+        locationLabel = selectedPlace.name;
+      } else if (currentLocation) {
+        lat = currentLocation.latitude;
+        lng = currentLocation.longitude;
+        locationLabel = 'Current Location';
+      }
+
+      const geoHash = (lat && lng) ? encodeGeoHash(lat, lng) : null;
+
+      if (isCreatingEvent) {
+        // Create event
+        // Combine date and time into start and end timestamps (2-hour duration by default)
+        const startDate = new Date(eventDate);
+        startDate.setHours(eventTime.getHours(), eventTime.getMinutes(), 0, 0);
+
+        const endDate = new Date(startDate);
+        endDate.setHours(endDate.getHours() + 2); // Default 2-hour event
+
+        await createEvent(user.uid, {
+          title: eventTitle.trim(),
+          description: eventDescription.trim(),
+          imageURL,
+          category: eventCategory,
+          startDate: Timestamp.fromDate(startDate),
+          endDate: Timestamp.fromDate(endDate),
+          geoHash,
+          lat,
+          lng,
+          locationLabel: locationLabel,
+        });
+
+        Alert.alert('Success', 'Your event has been created! 🎉', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      } else {
+        // Create post
+        await createPost(user.uid, {
+          caption: caption.trim(),
+          imageURL,
+          geoHash,
+          lat,
+          lng,
+          locationLabel,
+        });
+
+        Alert.alert('Success', 'Your post has been shared! 🎉', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
+      }
+    } catch (error) {
+      console.error('[CreatePost] Error creating post/event:', error);
+      if (error.message === 'Post creation timeout' || error.message === 'Event creation timeout') {
+        Alert.alert('Timeout', 'Creation took too long. Please check your connection and try again.');
+      } else {
+        Alert.alert('Error', 'Failed to create. Please try again.');
+      }
+    } finally {
+      setPosting(false);
+      setUploadProgress(0);
+    }
+  }, [selectedImageUri, caption, user, selectedPlace, currentLocation, navigation, isCreatingEvent, eventTitle, eventDescription, eventDate, eventTime, eventCategory]);
+
+  // Filter places by search query
+  const filteredPlaces = placeSearchQuery.trim()
+    ? places.filter(p =>
+        p.name.toLowerCase().includes(placeSearchQuery.toLowerCase()) ||
+        (p.address || '').toLowerCase().includes(placeSearchQuery.toLowerCase())
+      )
+    : places;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <WebView 
-        ref={webViewRef}
-        source={{ html: getHtmlContent(isDark) }} 
-        style={styles.webview}
-        originWhitelist={['*']}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        onMessage={handleMessage}
-      />
+    <SafeAreaView style={[styles.container, isDark && styles.containerDark]}>
+      {/* Header */}
+      <View style={[styles.header, isDark && styles.headerDark]}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.headerButtonIcon}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {isCreatingEvent ? 'New Event' : 'New Post'}
+        </Text>
+        <TouchableOpacity
+          style={[styles.postButton,
+            (isCreatingEvent ?
+              (!eventTitle.trim() || !eventDescription.trim() || !selectedImageUri) :
+              (!selectedImageUri && !caption.trim())
+            ) && styles.postButtonDisabled]}
+          onPress={handleSubmit}
+          disabled={posting ||
+            (isCreatingEvent ?
+              (!eventTitle.trim() || !eventDescription.trim() || !selectedImageUri) :
+              (!selectedImageUri && !caption.trim())
+            )}
+        >
+          {posting ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.postButtonText}>
+              {isCreatingEvent ? 'Create' : 'Post'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Image Upload Area */}
+          <TouchableOpacity
+            style={[styles.imageArea, isDark && styles.imageAreaDark]}
+            onPress={handlePickImage}
+            activeOpacity={0.7}
+          >
+            {selectedImageUri ? (
+              <View style={styles.imagePreviewContainer}>
+                <Image
+                  source={{ uri: selectedImageUri }}
+                  style={styles.imagePreview}
+                  contentFit="cover"
+                  transition={300}
+                />
+                {/* Edit overlay button */}
+                <TouchableOpacity
+                  style={styles.editImageButton}
+                  onPress={handlePickImage}
+                >
+                  <Text style={styles.editImageIcon}>✏️</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.imagePlaceholderIcon}>📸</Text>
+                <Text style={[styles.imagePlaceholderTitle, isDark && styles.textMuted]}>
+                  Tap to add a photo
+                </Text>
+                <Text style={[styles.imagePlaceholderSubtitle, isDark && styles.textDimmed]}>
+                  Share your discovery with the world
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Caption Input */}
+          <View style={[styles.captionContainer, isDark && styles.cardDark]}>
+            <TextInput
+              style={[styles.captionInput, isDark && styles.textWhite]}
+              placeholder="What did you discover? ✨"
+              placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
+              multiline
+              numberOfLines={4}
+              maxLength={500}
+              value={caption}
+              onChangeText={setCaption}
+              textAlignVertical="top"
+            />
+            <Text style={[styles.charCount, isDark && styles.textDimmed]}>
+              {caption.length}/500
+            </Text>
+          </View>
+
+          {/* Location Tag */}
+          <TouchableOpacity
+            style={[styles.locationTag, isDark && styles.cardDark]}
+            onPress={handleOpenPlacePicker}
+            activeOpacity={0.7}
+          >
+            <View style={styles.locationIconContainer}>
+              <Text style={styles.locationIcon}>📍</Text>
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={[styles.locationTitle, isDark && styles.textWhite]}>
+                {selectedPlace ? selectedPlace.name : 'Add Location'}
+              </Text>
+              <Text style={[styles.locationSubtitle, isDark && styles.textDimmed]}>
+                {selectedPlace
+                  ? selectedPlace.address || selectedPlace.category
+                  : 'Tag a nearby place to your post'}
+              </Text>
+            </View>
+            {selectedPlace ? (
+              <TouchableOpacity onPress={handleRemovePlace} style={styles.removePlace}>
+                <Text style={styles.removePlaceIcon}>✕</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={[styles.chevron, isDark && styles.textDimmed]}>›</Text>
+            )}
+          </TouchableOpacity>
+
+          {/* Current location fallback notice */}
+          {!selectedPlace && currentLocation && (
+            <View style={styles.locationNotice}>
+              <Text style={[styles.locationNoticeText, isDark && styles.textDimmed]}>
+                ℹ️ Your current location will be used if no place is tagged
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Posting Overlay */}
+      {posting && (
+        <View style={styles.postingOverlay}>
+          <View style={[styles.postingCard, isDark && styles.postingCardDark]}>
+            <ActivityIndicator size="large" color="#4648d4" />
+            <Text style={[styles.postingText, isDark && styles.textWhite]}>
+              Creating your post...
+            </Text>
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBar, { width: `${uploadProgress}%` }]} />
+            </View>
+            <Text style={[styles.progressText, isDark && styles.textDimmed]}>
+              {uploadProgress}%
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* Place Picker Modal */}
+      <Modal
+        visible={showPlacePicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPlacePicker(false)}
+      >
+        <SafeAreaView style={[styles.modalContainer, isDark && styles.containerDark]}>
+          {/* Modal Header */}
+          <View style={[styles.modalHeader, isDark && styles.headerDark]}>
+            <TouchableOpacity onPress={() => setShowPlacePicker(false)}>
+              <Text style={[styles.modalCancelText, isDark && styles.textMuted]}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, isDark && styles.textWhite]}>Tag a Place</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          {/* Search Bar */}
+          <View style={[styles.placeSearchContainer, isDark && styles.cardDark]}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={[styles.placeSearchInput, isDark && styles.textWhite]}
+              placeholder="Search places..."
+              placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
+              value={placeSearchQuery}
+              onChangeText={setPlaceSearchQuery}
+            />
+          </View>
+
+          {/* Category Tabs */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryTabs}
+          >
+            {PLACE_CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[
+                  styles.categoryTab,
+                  cat === selectedCategory && styles.categoryTabActive,
+                  isDark && cat !== selectedCategory && styles.categoryTabDark,
+                ]}
+                onPress={() => handleCategoryChange(cat)}
+              >
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    cat === selectedCategory && styles.categoryTabTextActive,
+                    isDark && cat !== selectedCategory && styles.categoryTabTextDark,
+                  ]}
+                >
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Places List */}
+          {placesLoading ? (
+            <View style={styles.placesLoading}>
+              <ActivityIndicator size="large" color="#4648d4" />
+              <Text style={[styles.placesLoadingText, isDark && styles.textDimmed]}>
+                Finding nearby places...
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredPlaces}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.placesList}
+              ListEmptyComponent={() => (
+                <View style={styles.placesEmpty}>
+                  <Text style={styles.placesEmptyIcon}>🗺️</Text>
+                  <Text style={[styles.placesEmptyText, isDark && styles.textDimmed]}>
+                    No places found nearby
+                  </Text>
+                </View>
+              )}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.placeItem, isDark && styles.placeItemDark]}
+                  onPress={() => handleSelectPlace(item)}
+                  activeOpacity={0.7}
+                >
+                  {item.image ? (
+                    <Image
+                      source={{ uri: item.image }}
+                      style={styles.placeImage}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <View style={[styles.placeImage, styles.placeImagePlaceholder]}>
+                      <Text style={styles.placeImagePlaceholderText}>📍</Text>
+                    </View>
+                  )}
+                  <View style={styles.placeInfo}>
+                    <Text style={[styles.placeName, isDark && styles.textWhite]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.placeAddress, isDark && styles.textDimmed]} numberOfLines={1}>
+                      {item.address || item.description}
+                    </Text>
+                    <View style={styles.placeMetaRow}>
+                      <Text style={styles.placeRating}>⭐ {item.rating}</Text>
+                      {item.distance != null && (
+                        <Text style={[styles.placeDistance, isDark && styles.textDimmed]}>
+                          {item.distance < 1
+                            ? `${Math.round(item.distance * 1000)}m`
+                            : `${item.distance.toFixed(1)}km`}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={[styles.selectPlaceChevron, isDark && styles.textDimmed]}>›</Text>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+
+          {/* Use Current Location Button */}
+          {currentLocation && (
+            <TouchableOpacity
+              style={[styles.useCurrentLocationButton, isDark && styles.useCurrentLocationButtonDark]}
+              onPress={() => {
+                setSelectedPlace({
+                  name: 'Current Location',
+                  address: `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`,
+                  latitude: currentLocation.latitude,
+                  longitude: currentLocation.longitude,
+                  category: 'Current',
+                });
+                setShowPlacePicker(false);
+              }}
+            >
+              <Text style={styles.useCurrentLocationIcon}>📍</Text>
+              <Text style={styles.useCurrentLocationText}>Use Current Location</Text>
+            </TouchableOpacity>
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -274,8 +555,485 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fcf8ff',
   },
-  webview: {
+  containerDark: {
+    backgroundColor: '#1b1b23',
+  },
+
+  // Header
+  header: {
+    height: 60,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.5)',
+    backgroundColor: 'rgba(252, 248, 255, 0.95)',
+  },
+  headerDark: {
+    backgroundColor: 'rgba(27, 27, 35, 0.95)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  headerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerButtonIcon: {
+    fontSize: 16,
+    color: '#464554',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#4648d4',
+    letterSpacing: -0.3,
+  },
+  postButton: {
+    backgroundColor: '#4648d4',
+    paddingHorizontal: 22,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+  postButtonDisabled: {
+    opacity: 0.45,
+  },
+  postButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+
+  // Scroll
+  scrollView: {
     flex: 1,
-    backgroundColor: 'transparent',
+  },
+  scrollContent: {
+    padding: 24,
+    gap: 16,
+  },
+
+  // Image Area
+  imageArea: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#c7c4d7',
+    overflow: 'hidden',
+    minHeight: 220,
+  },
+  imageAreaDark: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  imagePreviewContainer: {
+    position: 'relative',
+    width: '100%',
+    minHeight: 300,
+  },
+  imagePreview: {
+    width: '100%',
+    height: 350,
+    borderRadius: 18,
+  },
+  editImageButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editImageIcon: {
+    fontSize: 18,
+  },
+  imagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    gap: 8,
+  },
+  imagePlaceholderIcon: {
+    fontSize: 40,
+    marginBottom: 4,
+  },
+  imagePlaceholderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  imagePlaceholderSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    opacity: 0.7,
+  },
+
+  // Caption
+  captionContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  cardDark: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  captionInput: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#1b1b23',
+    minHeight: 100,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+  },
+  charCount: {
+    textAlign: 'right',
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+
+  // Location Tag
+  locationTag: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  locationIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(70, 72, 212, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationIcon: {
+    fontSize: 22,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1b1b23',
+    marginBottom: 2,
+  },
+  locationSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  chevron: {
+    fontSize: 24,
+    color: '#c7c4d7',
+    fontWeight: '300',
+  },
+  removePlace: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(186, 26, 26, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removePlaceIcon: {
+    fontSize: 12,
+    color: '#ba1a1a',
+    fontWeight: '700',
+  },
+  locationNotice: {
+    paddingHorizontal: 4,
+  },
+  locationNoticeText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+
+  // Posting Overlay
+  postingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  postingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    gap: 16,
+    width: SCREEN_WIDTH * 0.7,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  postingCardDark: {
+    backgroundColor: '#303038',
+  },
+  postingText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1b1b23',
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 6,
+    backgroundColor: '#e4e1ed',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#4648d4',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+
+  // Modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fcf8ff',
+  },
+  modalHeader: {
+    height: 56,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1b1b23',
+  },
+
+  // Place Search
+  placeSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    height: 46,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.5)',
+  },
+  searchIcon: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  placeSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1b1b23',
+  },
+
+  // Category Tabs
+  categoryTabs: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  categoryTab: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#e4e1ed',
+  },
+  categoryTabDark: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  categoryTabActive: {
+    backgroundColor: '#4648d4',
+  },
+  categoryTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#464554',
+  },
+  categoryTabTextDark: {
+    color: 'rgba(255,255,255,0.5)',
+  },
+  categoryTabTextActive: {
+    color: '#ffffff',
+  },
+
+  // Places List
+  placesList: {
+    paddingHorizontal: 20,
+    paddingBottom: 80,
+  },
+  placeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginBottom: 10,
+    gap: 14,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.3)',
+  },
+  placeItemDark: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  placeImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+  },
+  placeImagePlaceholder: {
+    backgroundColor: '#e4e1ed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeImagePlaceholderText: {
+    fontSize: 24,
+  },
+  placeInfo: {
+    flex: 1,
+  },
+  placeName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1b1b23',
+    marginBottom: 2,
+  },
+  placeAddress: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  placeMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  placeRating: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4648d4',
+  },
+  placeDistance: {
+    fontSize: 11,
+    color: '#64748B',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  selectPlaceChevron: {
+    fontSize: 22,
+    color: '#c7c4d7',
+    fontWeight: '300',
+  },
+
+  // Loading & Empty
+  placesLoading: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  placesLoadingText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+  placesEmpty: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 8,
+  },
+  placesEmptyIcon: {
+    fontSize: 36,
+  },
+  placesEmptyText: {
+    fontSize: 14,
+    color: '#64748B',
+  },
+
+  // Use Current Location Button
+  useCurrentLocationButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#4648d4',
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  useCurrentLocationButtonDark: {
+    backgroundColor: '#6063ee',
+  },
+  useCurrentLocationIcon: {
+    fontSize: 18,
+  },
+  useCurrentLocationText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+
+  // Text helpers
+  textWhite: {
+    color: '#f2effb',
+  },
+  textMuted: {
+    color: 'rgba(255,255,255,0.6)',
+  },
+  textDimmed: {
+    color: 'rgba(255,255,255,0.35)',
   },
 });

@@ -1,10 +1,15 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { WebView } from 'react-native-webview';
+import { useAuth } from '../../hooks/useAuth';
+import { useThemeStore } from '../../store/stores';
+import { logOut } from '../../services/authService';
 
-const htmlContent = `<!DOCTYPE html>
+const getHtmlContent = (user) => {
+  const displayName = user?.displayName || "Explorer";
+  const email = user?.email || "explorer@geoconnect.io";
+  return `<!DOCTYPE html>
 
 <html class="light" lang="en"><head>
 <meta charset="utf-8"/>
@@ -139,7 +144,7 @@ const htmlContent = `<!DOCTYPE html>
 <!-- TopAppBar -->
 <header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
 <div class="flex items-center gap-3">
-<button class="p-2 -ml-2 rounded-full hover:bg-surface-variant/50 transition-colors" onclick="history.back()">
+<button class="p-2 -ml-2 rounded-full hover:bg-surface-variant/50 transition-colors" onclick="window.ReactNativeWebView.postMessage('goBack')">
 <span class="material-symbols-outlined text-primary">arrow_back</span>
 </button>
 <h1 class="text-headline-md font-headline-md text-primary tracking-tight">Settings</h1>
@@ -154,11 +159,11 @@ const htmlContent = `<!DOCTYPE html>
 <!-- Profile Anchor Card -->
 <section class="staggered-entry bg-surface-pure rounded-xl p-4 whisper-shadow flex items-center gap-4">
 <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-primary-fixed-dim">
-<img alt="User Profile" class="w-full h-full object-cover" data-alt="A professional close-up portrait of a young traveler with a warm, authentic smile, set against a blurred urban background with soft afternoon lighting. The photograph has a high-quality, editorial feel with a clean, modern aesthetic that fits a sophisticated social exploration app. The lighting is natural and bright, emphasizing a friendly and approachable persona." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7aptUqWSfN7Mgv80CoZXJ7RF1XDJgzwbgHO_ap1UGVaZnTcrMJUgZsXuS_Go7iHOMjTwYVK28R8pywEVRxZmYM5vdoDXD408U1Mi113e9sZJ9EqHzNx8-Tjl4IbR89npwU5krsSvvc4jrggwR9ypImBvM0GXb_G_XWYkreIJEoUw8EjOTufM3YeHt7aBup8YxOIsTZQW0l-yv9y2Q7VLr88GetNuvEjuxnugZq-1pt6C3R7dltt-FKltccZKKxCaXs4H6zAsEMyA"/>
+<img alt="User Profile" class="w-full h-full object-cover" src="${user?.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(displayName) + '&background=4648d4&color=fff&size=128'}"/>
 </div>
 <div>
-<h2 class="font-headline-md text-body-lg text-on-surface">Alex Rivera</h2>
-<p class="text-on-surface-variant text-body-md">alex.rivera@geoconnect.io</p>
+<h2 class="font-headline-md text-body-lg text-on-surface">${displayName}</h2>
+<p class="text-on-surface-variant text-body-md">${email}</p>
 <span class="inline-flex items-center text-technical-label font-technical-label text-primary mt-1">
 <span class="material-symbols-outlined text-[14px] mr-1" style="font-variation-settings: 'FILL' 1;">verified</span> Verified Explorer
                 </span>
@@ -274,9 +279,9 @@ const htmlContent = `<!DOCTYPE html>
 </div>
 <!-- Logout Action -->
 <div class="staggered-entry delay-4 pt-4">
-<button class="w-full bg-surface-container-high text-error font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-error-container/20 transition-all group active:scale-[0.98]">
+<button onclick="window.ReactNativeWebView.postMessage('performLogout')" class="w-full bg-surface-container-high text-error font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-error-container/20 transition-all group active:scale-[0.98]">
 <span class="material-symbols-outlined transition-transform group-hover:rotate-12">logout</span>
-                Logout Alex Rivera
+                Logout ${displayName}
             </button>
 <p class="text-center text-[10px] text-muted-zinc mt-8 font-technical-label uppercase tracking-widest">GeoConnect Version 2.4.0 (Stable)</p>
 </div>
@@ -302,24 +307,46 @@ const htmlContent = `<!DOCTYPE html>
         const radiusDisplay = document.querySelector('.bg-primary-fixed');
         if (slider && radiusDisplay) {
             slider.addEventListener('input', (e) => {
-                radiusDisplay.textContent = \`\${e.target.value} km\`;
+                radiusDisplay.textContent = e.target.value + ' km';
             });
         }
     </script>
 </body></html>`;
+};
 
 export default function Settings({ navigation }) {
+  const { user } = useAuth();
+  const webViewRef = useRef(null);
+  const isDark = useThemeStore((state) => state.isDark);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
-        source={{ html: htmlContent }} 
+        ref={webViewRef}
+        source={{ html: getHtmlContent(user) }} 
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        onMessage={(event) => {
-          if (event.nativeEvent.data === 'openPrivacySettings') {
+        onMessage={async (event) => {
+          const action = event.nativeEvent.data;
+          if (action === 'goBack') {
+            navigation.goBack();
+          } else if (action === 'openPrivacySettings') {
             navigation.navigate('PrivacySettings');
+          } else if (action === 'performLogout') {
+            try {
+              await logOut();
+            } catch (error) {
+              Alert.alert("Logout Error", error.message);
+            }
           }
         }}
       />

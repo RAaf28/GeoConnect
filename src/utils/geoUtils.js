@@ -1,73 +1,87 @@
-// GeoHash utilities using geofire-common for geospatial queries
-// geohashQueryBounds returns multiple [start, end] bounds for proper radius coverage
-import { geohashQueryBounds, distanceBetween, geohashForLocation } from "geofire-common";
+import { geohashForLocation, geohashQueryBounds } from "geofire-common";
 
 /**
- * Encode koordinat ke GeoHash string
- * @param {number} latitude
- * @param {number} longitude
- * @param {number} precision - panjang hash (default 9 = ~5m presisi)
- * @returns {string} geohash
+ * Get GeoHash query bounds for a given center and radius.
+ * Returns an array of [start, end] bounds for Firestore range queries.
+ * This is the recommended approach from geofire-common for accurate geo queries.
+ * @param {number} latitude - Center latitude
+ * @param {number} longitude - Center longitude
+ * @param {number} radiusMeters - Search radius in meters
+ * @returns {Array<[string, string]>} Array of [startHash, endHash] bounds
  */
-export const encodeGeoHash = (latitude, longitude, precision = 9) => {
+export const getGeoHashBounds = (latitude, longitude, radiusMeters) => {
   try {
-    return geohashForLocation([latitude, longitude], precision);
+    return geohashQueryBounds([latitude, longitude], radiusMeters);
   } catch (error) {
-    console.error("GeoHash encode error:", error);
-    return "";
-  }
-};
-
-/**
- * Hitung GeoHash query bounds untuk radius tertentu.
- * Mengembalikan array pasangan [start, end] yang mencakup area dalam radius.
- *
- * Ini adalah cara BENAR untuk melakukan radius query di Firestore dengan GeoHash —
- * satu prefix query saja bisa miss hasil di boundary hash yang berbeda.
- *
- * @param {number} latitude  - center lat
- * @param {number} longitude - center lng
- * @param {number} radiusKm  - radius dalam kilometer
- * @returns {Array<[string, string]>} array of [startHash, endHash] bounds
- */
-export const getGeoHashBounds = (latitude, longitude, radiusKm) => {
-  try {
-    const radiusMeters = radiusKm * 1000;
-    const bounds = geohashQueryBounds([latitude, longitude], radiusMeters);
-    return bounds;
-  } catch (error) {
-    console.error("GeoHash bounds error:", error);
+    console.error("[GeoUtils] Error calculating GeoHash bounds:", error);
     return [];
   }
 };
 
 /**
- * Hitung jarak antara dua titik menggunakan geofire-common (lebih akurat)
- * @param {number} lat1
- * @param {number} lng1
- * @param {number} lat2
- * @param {number} lng2
- * @returns {number} jarak dalam km
+ * Encode latitude/longitude into a GeoHash string.
+ * Uses geofire-common for standard GeoHash encoding.
+ * @param {number} latitude
+ * @param {number} longitude
+ * @param {number} precision - GeoHash precision level (1-12, default 9)
+ * @returns {string} GeoHash string
  */
-export const geoDistance = (lat1, lng1, lat2, lng2) => {
+export const encodeGeoHash = (latitude, longitude, precision = 9) => {
   try {
-    // distanceBetween returns km
-    return distanceBetween([lat1, lng1], [lat2, lng2]);
+    return geohashForLocation([latitude, longitude], precision);
   } catch (error) {
-    console.error("geoDistance error:", error);
-    return Infinity;
+    console.error("[GeoUtils] GeoHash encode error:", error);
+    return "";
   }
 };
 
+/**
+ * Get the appropriate GeoHash precision level for a given search radius.
+ * Lower precision = larger area covered by GeoHash prefix = broader query.
+ *
+ * GeoHash precision vs approximate area:
+ *   1 → ~5000km    (continent level)
+ *   2 → ~1250km    (large country)
+ *   3 → ~156km     (large city / state)
+ *   4 → ~39km      (city)
+ *   5 → ~4.9km     (neighborhood) ← good for 5-10km
+ *   6 → ~1.2km     (street block)  ← good for 1-5km
+ *   7 → ~153m      (block)         ← good for 500m-1km
+ *   8 → ~38m       (building)
+ *   9 → ~4.8m      (room)
+ *
+ * @param {number} radiusKm - Search radius in kilometers
+ * @returns {number} Recommended GeoHash precision level
+ */
+export const getGeoHashPrecisionForRadius = (radiusKm) => {
+  if (radiusKm <= 0.5) return 7; // 500m → precision 7 (~153m cells)
+  if (radiusKm <= 1) return 6; // 1km → precision 6 (~1.2km cells)
+  if (radiusKm <= 5) return 5; // 5km → precision 5 (~4.9km cells)
+  if (radiusKm <= 10) return 5; // 10km → precision 5
+  if (radiusKm <= 50) return 4; // 50km → precision 4 (~39km cells)
+  return 3; // >50km → precision 3
+};
+
+/**
+ * Returns GeoHash range bounds for Firestore queries.
+ * @param {string} geoHash - GeoHash prefix
+ * @returns {{ start: string, end: string }}
+ */
 export const decodeGeoHashRange = (geoHash) => {
-  // Returns a range prefix for Firestore query (legacy simple approach)
   return {
     start: geoHash,
-    end: geoHash + "z",
+    end: geoHash + "\uf8ff",
   };
 };
 
-// Blurred location: randomize coordinates within ±500m
+/**
+ * Blurred location: randomize coordinates within a given radius.
+ * Used for "blurred" privacy mode to protect exact user location.
+ * @param {number} latitude - Original latitude
+ * @param {number} longitude - Original longitude
+ * @param {number} radiusMeters - Blur radius in meters (default 500m)
+ * @returns {{ latitude: number, longitude: number }} Blurred coordinates
+ */
 export const blurLocation = (latitude, longitude, radiusMeters = 500) => {
   const earthRadiusMeters = 6371000;
   const randomBearing = Math.random() * 2 * Math.PI;
@@ -88,7 +102,14 @@ export const blurLocation = (latitude, longitude, radiusMeters = 500) => {
   };
 };
 
-// Calculate distance between two points (Haversine formula)
+/**
+ * Calculate distance between two geographic points using the Haversine formula.
+ * @param {number} lat1 - Latitude of point 1
+ * @param {number} lng1 - Longitude of point 1
+ * @param {number} lat2 - Latitude of point 2
+ * @param {number} lng2 - Longitude of point 2
+ * @returns {number} Distance in kilometers
+ */
 export const calculateDistance = (lat1, lng1, lat2, lng2) => {
   const R = 6371; // Earth radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -103,10 +124,44 @@ export const calculateDistance = (lat1, lng1, lat2, lng2) => {
   return R * c;
 };
 
-// Format distance for display (e.g., "500m" or "2.5km")
+/**
+ * Format distance for display (e.g., "500m" or "2.5km").
+ * @param {number} distanceKm - Distance in kilometers
+ * @returns {string} Formatted distance string
+ */
 export const formatDistance = (distanceKm) => {
   if (distanceKm < 1) {
     return `${Math.round(distanceKm * 1000)}m`;
   }
   return `${distanceKm.toFixed(1)}km`;
+};
+
+/**
+ * Apply privacy mode to location data before saving.
+ * Used when creating posts or updating user location.
+ * @param {number} lat - Original latitude
+ * @param {number} lng - Original longitude
+ * @param {string} privacyMode - "exact" | "blurred" | "hidden"
+ * @returns {{ lat: number|null, lng: number|null, geoHash: string|null }}
+ */
+export const applyPrivacyToLocation = (lat, lng, privacyMode) => {
+  if (privacyMode === "hidden") {
+    return { lat: null, lng: null, geoHash: null };
+  }
+
+  if (privacyMode === "blurred") {
+    const blurred = blurLocation(lat, lng);
+    return {
+      lat: blurred.latitude,
+      lng: blurred.longitude,
+      geoHash: encodeGeoHash(blurred.latitude, blurred.longitude),
+    };
+  }
+
+  // "exact" mode
+  return {
+    lat,
+    lng,
+    geoHash: encodeGeoHash(lat, lng),
+  };
 };

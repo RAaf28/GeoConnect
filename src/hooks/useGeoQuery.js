@@ -1,26 +1,21 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocationStore } from "../store/stores";
 import {
-  getGeoHashBounds,
-  geoDistance,
+  encodeGeoHash,
   calculateDistance,
-  formatDistance,
+  getGeoHashPrecisionForRadius,
 } from "../utils/geoUtils";
 import {
-  getPostsByGeoHashBounds,
-  getEventsByGeoHashBounds,
-  getUserProfile,
+  getPostsNearby,
+  getEventsNearby,
+  getNearbyUsers,
 } from "../services/firestoreService";
 
-// ===== useNearbyPosts =====
-
 /**
- * Hook untuk mengambil posts di area sekitar user.
- * Menggunakan multi-range GeoHash query dari geofire-common
- * untuk hasil yang akurat di boundary hash.
- *
- * @param {number} radiusKm - Radius pencarian dalam km (default: 1)
- * @returns {{ nearbyPosts: Array, loading: boolean, error: string|null, refresh: Function }}
+ * Hook to fetch nearby posts from Firestore using GeoHash range queries.
+ * Filters results by Haversine distance to ensure accuracy within the specified radius.
+ * @param {number} radiusKm - Search radius in kilometers (default 1)
+ * @returns {{ nearbyPosts: Array, loading: boolean, error: Error|null, refresh: Function }}
  */
 export const useNearbyPosts = (radiusKm = 1) => {
   const [nearbyPosts, setNearbyPosts] = useState([]);
@@ -31,50 +26,54 @@ export const useNearbyPosts = (radiusKm = 1) => {
   const fetchNearbyPosts = useCallback(async () => {
     if (!currentLocation) return;
 
-    setLoading(true);
-    setError(null);
     try {
-      const { latitude, longitude } = currentLocation;
+      setLoading(true);
+      setError(null);
 
-      // 1. Hitung GeoHash bounds untuk radius
-      const bounds = getGeoHashBounds(latitude, longitude, radiusKm);
-      if (bounds.length === 0) {
+      // Get appropriate GeoHash precision for the radius
+      const precision = getGeoHashPrecisionForRadius(radiusKm);
+      const geoHash = encodeGeoHash(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        precision,
+      );
+
+      if (!geoHash) {
+        console.warn("[useNearbyPosts] Failed to encode GeoHash");
         setNearbyPosts([]);
         return;
       }
 
-      // 2. Query Firestore dengan multi-range bounds
-      const rawPosts = await getPostsByGeoHashBounds(bounds);
+      // Fetch posts from Firestore using GeoHash range query
+      const posts = await getPostsNearby(geoHash);
 
-      // 3. Filter client-side: hanya posts yang benar-benar dalam radius
-      //    (GeoHash bounds bisa mengembalikan hasil di luar radius)
-      const filteredPosts = rawPosts
-        .map((post) => {
-          if (!post.lat || !post.lng) return null;
-          const distance = geoDistance(
-            latitude,
-            longitude,
+      // Client-side Haversine filter for precise radius
+      const filtered = posts
+        .filter((post) => {
+          if (!post.lat || !post.lng) return false;
+          const distance = calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
             post.lat,
             post.lng,
           );
-          if (distance <= radiusKm) {
-            return {
-              ...post,
-              distance,
-              distanceLabel: formatDistance(distance),
-            };
-          }
-          return null;
+          return distance <= radiusKm;
         })
-        .filter(Boolean);
+        .map((post) => ({
+          ...post,
+          distance: calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            post.lat,
+            post.lng,
+          ),
+        }))
+        .sort((a, b) => a.distance - b.distance);
 
-      // 4. Sort by jarak terdekat
-      filteredPosts.sort((a, b) => a.distance - b.distance);
-
-      setNearbyPosts(filteredPosts);
+      setNearbyPosts(filtered);
     } catch (err) {
-      console.error("[useNearbyPosts] Error:", err);
-      setError(err.message);
+      console.error("[useNearbyPosts] Error fetching nearby posts:", err);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -87,133 +86,69 @@ export const useNearbyPosts = (radiusKm = 1) => {
   return { nearbyPosts, loading, error, refresh: fetchNearbyPosts };
 };
 
-// ===== useNearbyPeople =====
-
 /**
- * Hook untuk menemukan orang-orang di sekitar.
- *
- * Logika: Cari posts yang ada di radius → kelompokkan berdasarkan authorId
- * → ambil profil user untuk setiap author unik → filter yang privacy-nya
- * bukan "hidden" atau invisibleMode.
- *
- * Sesuai project plan:
- * "Nearby People: list akun publik yang pernah posting di area ≤ radius pilihan"
- *
- * @param {number} radiusKm - Radius pencarian dalam km (default: 1)
- * @returns {{ nearbyPeople: Array, loading: boolean, error: string|null, refresh: Function }}
+ * Hook to fetch nearby people (users who have shared their location).
+ * Respects privacy settings — hidden/invisible users are excluded server-side.
+ * @param {number} radiusKm - Search radius in kilometers (default 1)
+ * @returns {{ nearbyPeople: Array, loading: boolean, error: Error|null, refresh: Function }}
  */
 export const useNearbyPeople = (radiusKm = 1) => {
   const [nearbyPeople, setNearbyPeople] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const currentLocation = useLocationStore((state) => state.currentLocation);
-  // Prevent concurrent fetches
-  const fetchingRef = useRef(false);
 
   const fetchNearbyPeople = useCallback(async () => {
-    if (!currentLocation || fetchingRef.current) return;
-
-    fetchingRef.current = true;
-    setLoading(true);
-    setError(null);
+    if (!currentLocation) return;
 
     try {
-      const { latitude, longitude } = currentLocation;
+      setLoading(true);
+      setError(null);
 
-      // 1. Hitung GeoHash bounds untuk radius
-      const bounds = getGeoHashBounds(latitude, longitude, radiusKm);
-      if (bounds.length === 0) {
+      const precision = getGeoHashPrecisionForRadius(radiusKm);
+      const geoHash = encodeGeoHash(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        precision,
+      );
+
+      if (!geoHash) {
         setNearbyPeople([]);
         return;
       }
 
-      // 2. Query posts dalam radius (sama seperti useNearbyPosts)
-      const rawPosts = await getPostsByGeoHashBounds(bounds);
+      // Fetch nearby users (already filtered for hidden/invisible in service)
+      const users = await getNearbyUsers(geoHash);
 
-      // 3. Filter posts yang benar-benar dalam radius
-      const postsInRadius = rawPosts.filter((post) => {
-        if (!post.lat || !post.lng) return false;
-        const distance = geoDistance(latitude, longitude, post.lat, post.lng);
-        return distance <= radiusKm;
-      });
+      // Client-side Haversine filter for precise radius
+      const filtered = users
+        .filter((user) => {
+          if (!user.lastLat || !user.lastLng) return false;
+          const distance = calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            user.lastLat,
+            user.lastLng,
+          );
+          return distance <= radiusKm;
+        })
+        .map((user) => ({
+          ...user,
+          distance: calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            user.lastLat,
+            user.lastLng,
+          ),
+        }))
+        .sort((a, b) => a.distance - b.distance);
 
-      // 4. Kelompokkan berdasarkan authorId
-      //    Simpan post terdekat untuk setiap author (sebagai lokasi referensi)
-      const authorMap = new Map();
-      for (const post of postsInRadius) {
-        const distance = geoDistance(
-          latitude,
-          longitude,
-          post.lat,
-          post.lng,
-        );
-
-        const existing = authorMap.get(post.authorId);
-        if (!existing || distance < existing.distance) {
-          authorMap.set(post.authorId, {
-            authorId: post.authorId,
-            distance,
-            distanceLabel: formatDistance(distance),
-            latestPostLat: post.lat,
-            latestPostLng: post.lng,
-            postCount: (existing?.postCount || 0) + 1,
-          });
-        } else {
-          existing.postCount += 1;
-        }
-      }
-
-      // 5. Ambil profil user untuk setiap author unik
-      const authorIds = Array.from(authorMap.keys());
-      const profilePromises = authorIds.map(async (authorId) => {
-        try {
-          const profile = await getUserProfile(authorId);
-          return { authorId, profile };
-        } catch {
-          return { authorId, profile: null };
-        }
-      });
-
-      const profiles = await Promise.all(profilePromises);
-
-      // 6. Gabungkan data author + profile
-      //    Filter: skip user tanpa profil, skip yang privacy mode = "hidden", skip invisibleMode
-      const people = [];
-      for (const { authorId, profile } of profiles) {
-        if (!profile) continue;
-
-        // Cek privacy settings
-        const privacy = profile.locationPrivacy || {
-          mode: "hidden",
-          invisibleMode: false,
-        };
-        if (privacy.mode === "hidden" || privacy.invisibleMode) continue;
-
-        const authorData = authorMap.get(authorId);
-        people.push({
-          id: authorId,
-          displayName: profile.displayName || "Anonymous",
-          photoURL: profile.photoURL || null,
-          bio: profile.bio || "",
-          distance: authorData.distance,
-          distanceLabel: authorData.distanceLabel,
-          postCount: authorData.postCount,
-          followersCount: profile.followersCount || 0,
-          followingCount: profile.followingCount || 0,
-          privacyMode: privacy.mode, // "exact" atau "blurred"
-        });
-      }
-
-      // 7. Sort by jarak terdekat
-      people.sort((a, b) => a.distance - b.distance);
-
-      setNearbyPeople(people);
+      setNearbyPeople(filtered);
     } catch (err) {
-      console.error("[useNearbyPeople] Error:", err);
-      setError(err.message);
+      console.error("[useNearbyPeople] Error fetching nearby people:", err);
+      setError(err);
     } finally {
       setLoading(false);
-      fetchingRef.current = false;
     }
   }, [currentLocation, radiusKm]);
 
@@ -224,16 +159,10 @@ export const useNearbyPeople = (radiusKm = 1) => {
   return { nearbyPeople, loading, error, refresh: fetchNearbyPeople };
 };
 
-// ===== useNearbyEvents =====
-
 /**
- * Hook untuk menemukan events publik di area sekitar.
- *
- * Sesuai project plan:
- * "Event Discovery: peta event publik dalam radius tertentu"
- *
- * @param {number} radiusKm - Radius pencarian dalam km (default: 5)
- * @returns {{ nearbyEvents: Array, loading: boolean, error: string|null, refresh: Function }}
+ * Hook to fetch nearby events from Firestore using GeoHash range queries.
+ * @param {number} radiusKm - Search radius in kilometers (default 5)
+ * @returns {{ nearbyEvents: Array, loading: boolean, error: Error|null, refresh: Function }}
  */
 export const useNearbyEvents = (radiusKm = 5) => {
   const [nearbyEvents, setNearbyEvents] = useState([]);
@@ -244,77 +173,52 @@ export const useNearbyEvents = (radiusKm = 5) => {
   const fetchNearbyEvents = useCallback(async () => {
     if (!currentLocation) return;
 
-    setLoading(true);
-    setError(null);
     try {
-      const { latitude, longitude } = currentLocation;
+      setLoading(true);
+      setError(null);
 
-      // 1. Hitung GeoHash bounds untuk radius
-      const bounds = getGeoHashBounds(latitude, longitude, radiusKm);
-      if (bounds.length === 0) {
+      const precision = getGeoHashPrecisionForRadius(radiusKm);
+      const geoHash = encodeGeoHash(
+        currentLocation.latitude,
+        currentLocation.longitude,
+        precision,
+      );
+
+      if (!geoHash) {
         setNearbyEvents([]);
         return;
       }
 
-      // 2. Query events dengan multi-range bounds
-      const rawEvents = await getEventsByGeoHashBounds(bounds);
+      // Fetch events from Firestore using GeoHash range query
+      const events = await getEventsNearby(geoHash);
 
-      // 3. Filter client-side: hanya events dalam radius yang sebenarnya
-      const now = new Date();
-      const filteredEvents = rawEvents
-        .map((event) => {
-          if (!event.lat || !event.lng) return null;
-          const distance = geoDistance(
-            latitude,
-            longitude,
+      // Client-side Haversine filter for precise radius
+      const filtered = events
+        .filter((event) => {
+          if (!event.lat || !event.lng) return false;
+          const distance = calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
             event.lat,
             event.lng,
           );
-          if (distance <= radiusKm) {
-            // Tentukan status event (upcoming / ongoing / past)
-            let status = "upcoming";
-            if (event.startDate) {
-              const startDate = event.startDate.toDate
-                ? event.startDate.toDate()
-                : new Date(event.startDate);
-              const endDate = event.endDate
-                ? event.endDate.toDate
-                  ? event.endDate.toDate()
-                  : new Date(event.endDate)
-                : null;
-
-              if (endDate && now > endDate) {
-                status = "past";
-              } else if (now >= startDate) {
-                status = "ongoing";
-              }
-            }
-
-            return {
-              ...event,
-              distance,
-              distanceLabel: formatDistance(distance),
-              status,
-              goingCount: event.rsvpCounts?.going || 0,
-              interestedCount: event.rsvpCounts?.interested || 0,
-            };
-          }
-          return null;
+          return distance <= radiusKm;
         })
-        .filter(Boolean);
+        .map((event) => ({
+          ...event,
+          distance: calculateDistance(
+            currentLocation.latitude,
+            currentLocation.longitude,
+            event.lat,
+            event.lng,
+          ),
+        }))
+        .sort((a, b) => a.distance - b.distance);
 
-      // 4. Sort: ongoing dulu, lalu upcoming, terakhir past. Dalam group, sort by jarak
-      const statusOrder = { ongoing: 0, upcoming: 1, past: 2 };
-      filteredEvents.sort((a, b) => {
-        const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-        if (statusDiff !== 0) return statusDiff;
-        return a.distance - b.distance;
-      });
-
-      setNearbyEvents(filteredEvents);
+      setNearbyEvents(filtered);
     } catch (err) {
-      console.error("[useNearbyEvents] Error:", err);
-      setError(err.message);
+      console.error("[useNearbyEvents] Error fetching nearby events:", err);
+      setError(err);
     } finally {
       setLoading(false);
     }

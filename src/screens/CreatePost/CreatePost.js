@@ -1,294 +1,269 @@
-import React from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../../hooks/useAuth';
+import { useThemeStore, useLocationStore } from '../../store/stores';
+import { createPost } from '../../services/firestoreService';
+import { uploadPostImage } from '../../services/storageService';
+import { encodeGeoHash } from '../../utils/geoUtils';
 
-const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
+const getHtmlContent = (isDark) => {
+  return `<!DOCTYPE html><html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
 <meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
-<title>GeoConnect - Create Post</title>
-<!-- Font and Icons -->
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>GeoConnect | Create Post</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<style>
-    .material-symbols-outlined {
-      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    }
-    .glass-panel {
-      background: rgba(255, 255, 255, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-    }
-    .whisper-shadow {
-      box-shadow: 0 4px 20px -2px rgba(73, 75, 214, 0.08);
-    }
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      overscroll-behavior: none;
-    }
-    .tap-scale {
-      transition: transform 0.15s ease-out;
-    }
-    .tap-scale:active {
-      transform: translateY(1px) scale(0.98);
-    }
-  </style>
 <script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          "colors": {
-                  "primary-fixed": "#e1e0ff",
-                  "on-primary-container": "#fffbff",
-                  "soft-border": "rgba(226, 232, 240, 0.8)",
-                  "on-surface-variant": "#464554",
-                  "on-secondary": "#ffffff",
-                  "surface-dim": "#dbd8e4",
-                  "outline": "#767586",
-                  "canvas-white": "#F9FAFB",
-                  "inverse-on-surface": "#f2effb",
-                  "on-tertiary-fixed-variant": "#703700",
-                  "on-tertiary-container": "#fffbff",
-                  "on-tertiary-fixed": "#301400",
-                  "on-error-container": "#93000a",
-                  "tertiary": "#904900",
-                  "outline-variant": "#c7c4d7",
-                  "on-primary-fixed-variant": "#2f2ebe",
-                  "tertiary-fixed-dim": "#ffb783",
-                  "surface-pure": "#FFFFFF",
-                  "inverse-surface": "#303038",
-                  "inverse-primary": "#c0c1ff",
-                  "error-container": "#ffdad6",
-                  "secondary-container": "#dae2fd",
-                  "on-tertiary": "#ffffff",
-                  "surface": "#fcf8ff",
-                  "surface-bright": "#fcf8ff",
-                  "on-secondary-fixed": "#131b2e",
-                  "on-background": "#1b1b23",
-                  "on-secondary-fixed-variant": "#3f465c",
-                  "surface-container": "#efecf8",
-                  "surface-container-low": "#f5f2fe",
-                  "surface-variant": "#e4e1ed",
-                  "primary-fixed-dim": "#c0c1ff",
-                  "muted-zinc": "#64748B",
-                  "surface-tint": "#494bd6",
-                  "tertiary-container": "#b55d00",
-                  "on-error": "#ffffff",
-                  "secondary": "#565e74",
-                  "background": "#fcf8ff",
-                  "surface-container-highest": "#e4e1ed",
-                  "secondary-fixed-dim": "#bec6e0",
-                  "error": "#ba1a1a",
-                  "tertiary-fixed": "#ffdcc5",
-                  "on-secondary-container": "#5c647a",
-                  "on-surface": "#1b1b23",
-                  "secondary-fixed": "#dae2fd",
-                  "primary": "#4648d4",
-                  "surface-container-lowest": "#ffffff",
-                  "on-primary-fixed": "#07006c",
-                  "on-primary": "#ffffff",
-                  "surface-container-high": "#e9e6f3",
-                  "primary-container": "#6063ee"
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "muted-zinc":"#64748B","surface-bright":"#fcf8ff","on-secondary":"#ffffff",
+                    "on-surface":"#1b1b23","surface-variant":"#e4e1ed","error":"#ba1a1a",
+                    "primary":"#4648d4","primary-container":"#6063ee","on-primary":"#ffffff",
+                    "on-surface-variant":"#464554","surface-container":"#efecf8",
+                    "surface-pure":"#FFFFFF","surface-dim":"#dbd8e4",
+                    "surface-container-highest":"#e4e1ed","soft-border":"rgba(226, 232, 240, 0.8)",
+                    "background":"#fcf8ff","inverse-on-surface":"#f2effb",
+                    "inverse-surface":"#303038","outline-variant":"#c7c4d7",
+                    "surface-container-low":"#f5f2fe","surface-container-high":"#e9e6f3",
+                    "surface":"#fcf8ff","tertiary":"#904900","on-error-container":"#93000a",
+                    "error-container":"#ffdad6","inverse-primary":"#c0c1ff","primary-fixed":"#e1e0ff",
+                    "outline":"#767586","surface-tint":"#494bd6","on-primary-container":"#fffbff",
+                    "secondary":"#565e74","on-background":"#1b1b23"
+            },
+            "borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},
+            "spacing":{"gutter-grid":"16px","margin-page":"24px","stack-gap":"12px","safe-area":"32px"},
+            "fontFamily":{"technical-label":["JetBrains Mono"],"headline-lg":["Plus Jakarta Sans"],"headline-lg-mobile":["Plus Jakarta Sans"],"body-lg":["Plus Jakarta Sans"],"headline-md":["Plus Jakarta Sans"],"body-md":["Plus Jakarta Sans"]},
+            "fontSize":{"technical-label":["12px",{"lineHeight":"1.4","fontWeight":"500"}],"headline-md":["24px",{"lineHeight":"1.2","letterSpacing":"-0.01em","fontWeight":"700"}],"body-md":["14px",{"lineHeight":"1.6","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"1.6","fontWeight":"400"}]}
           },
-          "borderRadius": {
-                  "DEFAULT": "0.25rem",
-                  "lg": "0.5rem",
-                  "xl": "0.75rem",
-                  "full": "9999px"
-          },
-          "spacing": {
-                  "safe-area": "32px",
-                  "margin-page": "24px",
-                  "gutter-grid": "16px",
-                  "stack-gap": "12px"
-          },
-          "fontFamily": {
-                  "technical-label": ["JetBrains Mono"],
-                  "headline-md": ["Plus Jakarta Sans"],
-                  "body-md": ["Plus Jakarta Sans"],
-                  "body-lg": ["Plus Jakarta Sans"],
-                  "headline-lg": ["Plus Jakarta Sans"],
-                  "headline-lg-mobile": ["Plus Jakarta Sans"]
-          },
-          "fontSize": {
-                  "technical-label": ["12px", {"lineHeight": "1.4", "fontWeight": "500"}],
-                  "headline-md": ["24px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
-                  "body-md": ["14px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                  "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                  "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
-                  "headline-lg-mobile": ["28px", {"lineHeight": "1.2", "fontWeight": "700"}]
-          }
         },
-      },
-    }
-  </script>
-</head>
-<body class="bg-surface text-on-surface">
-<!-- TopAppBar (Transactional Screen: Hide BottomNavBar and SideNav) -->
-<header class="sticky top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm flex justify-between items-center px-margin-page h-16 w-full">
-<button aria-label="Cancel" class="flex items-center justify-center p-2 text-on-surface-variant hover:opacity-80 transition-opacity active:translate-y-[1px]">
-<span class="font-body-lg text-body-lg">Cancel</span>
-</button>
-<h1 class="font-headline-md text-headline-md font-bold text-primary">New Post</h1>
-<button class="bg-primary-container text-on-primary-container px-6 py-2 rounded-xl font-bold shadow-sm hover:opacity-90 active:translate-y-[1px] transition-all">
-      Post
-    </button>
-</header>
-<main class="max-w-2xl mx-auto px-margin-page pt-stack-gap pb-safe-area space-y-6">
-<!-- Profile & Visibility Context -->
-<section class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-full overflow-hidden border border-soft-border">
-<img class="w-full h-full object-cover" data-alt="A portrait of a young professional man with a friendly expression in a brightly lit studio. The aesthetic is clean and modern, featuring soft natural lighting that emphasizes a high-end light-mode look. The color palette is composed of soft whites and neutrals with a subtle hint of the primary indigo brand color in his shirt. High-definition detailing captures a sense of approachability and technical precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD9uNGwZd05KPepH_30jUvNm5ILCaeWOFqzBSmmEsSUKq-Y06p855OauyNvZ1XOVBeKKy6nfPCvp-xHHN3-zOpxjQK6X0TTPUujY5I0xts4v168yqdOosUAfNN3Y8aXR7o5eTByVBxRzl6OD36DKzesBSvUZOJ9E6lBR18ARdmlLarsM3bXF1UmA-8PLiGY74CFR-fimTaFzq8ZLuodU840-7cAeiIh3W2cp8X6g_z7nHgqHXD4KlQptS2Zsc_aWWLPqqQeujP4zCc">
-</div>
-<div>
-<h2 class="font-body-md text-body-md font-bold text-on-surface">Alex Rivera</h2>
-<div class="flex items-center gap-1 text-on-surface-variant">
-<span class="material-symbols-outlined text-[14px]">public</span>
-<span class="font-technical-label text-[11px] uppercase tracking-wider">Public</span>
-<span class="material-symbols-outlined text-[14px]">expand_more</span>
-</div>
-</div>
-</section>
-<!-- Text Input Area -->
-<section class="space-y-4">
-<textarea class="w-full bg-transparent border-none focus:ring-0 font-body-lg text-body-lg min-h-[120px] resize-none placeholder:text-outline/60" placeholder="What's happening at this location?"></textarea>
-</section>
-<!-- Media Upload Bento Section -->
-<section class="grid grid-cols-2 gap-4">
-<!-- Media Slot 1 (Placeholder) -->
-<div class="relative aspect-square rounded-xl bg-surface-container-low overflow-hidden group border-2 border-dashed border-outline-variant hover:border-primary-container transition-colors cursor-pointer flex flex-col items-center justify-center gap-2">
-<span class="material-symbols-outlined text-primary text-4xl">add_a_photo</span>
-<span class="font-body-md text-on-surface-variant font-medium">Add Media</span>
-</div>
-<!-- Current Selection Suggestion (Visual Interest) -->
-<div class="relative aspect-square rounded-xl bg-surface-container-highest overflow-hidden group whisper-shadow">
-<img class="w-full h-full object-cover opacity-60 grayscale group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" data-alt="A breathtaking panoramic landscape view of Yosemite Valley during the golden hour. The image features dramatic mountain peaks and lush greenery under a warm, glowing sky. The visual style is crisp and vivid, aligning with the GeoConnect brand's focus on exploration and discovery. The lighting is rich and atmospheric, creating deep contrasts and a premium aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDHmIVWpnrzij4K4gWdyfRkqCPhQp6B4Pwt6m5uVyKvTax3RpE-BSsJiLqZVURoseYwCw3e3-9GdUJIbGGQAu_7WP6nTTr2DSP7UrymRRPu00gjWkX6ztKejp8T0imoAmWVhTp1VCJcNREQ1n-MrULLycb7MlzdGRx1EjKV9AzXjpEWNe6oyB5B0uOwiC8qYl9LmpdqzOiiH3IzQWSfKejDgYLDPR8X3V30zunwVpFGF0Ld-2YBtoRWQmbBbGlVRpCdE1Yvz9AU5WQ">
-<div class="absolute inset-0 flex items-center justify-center">
-<span class="material-symbols-outlined text-surface-pure text-3xl drop-shadow-md">collections</span>
-</div>
-</div>
-</section>
-<!-- Tag Location Section -->
-<section class="bg-surface-pure rounded-xl p-4 whisper-shadow border border-soft-border space-y-3">
-<div class="flex items-center justify-between">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-lg bg-primary-fixed flex items-center justify-center">
-<span class="material-symbols-outlined text-primary">location_on</span>
-</div>
-<div>
-<p class="font-body-md text-body-md font-bold text-on-surface">Tag Location</p>
-<p class="font-technical-label text-[12px] text-on-surface-variant">Recommended: Presidio Park, San Francisco</p>
-</div>
-</div>
-<button class="material-symbols-outlined text-outline">search</button>
-</div>
-<!-- Mini Map Context -->
-<div class="w-full h-32 rounded-lg overflow-hidden relative">
-<img class="w-full h-full object-cover" data-alt="A stylized overhead map view of a vibrant urban coastal area with clean white roads, soft blue water, and minimalist park markers in indigo. The design is modern and technical, using a light mode aesthetic with high legibility and glassmorphic interface elements overlaid. The overall feel is architectural and explorative." data-location="San Francisco" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAR-PJ9R5pUZNJyjke2jGxqx9rCyeA11fq_MCKSMtw6rUcS8RITLVeb-RnsnA81MXF4SOA8PCYis3UDQFiPLrdW6pMR1u6zKsrZd1ayP6pAUB60G6QLa9aXjpYMwRFQ9Drd-8i5BlyvMBetc2FTTWP3tjrMnwnUr8PV-5bDAJid9h8oIubnaFNWsgZiapQz3EJqtsOYy3fEANqnu2VFKZc8MW3zsGAbHY-Et1lHtRdv8uwboAZ9ECN6Uz_tyJSTyhWnrsEs-4Zu-aQ">
-<div class="absolute inset-0 bg-primary/10 flex items-center justify-center">
-<div class="relative">
-<div class="absolute inset-0 animate-ping rounded-full bg-primary/40 h-8 w-8 -m-2"></div>
-<div class="relative w-4 h-4 bg-primary rounded-full border-2 border-surface-pure shadow-lg"></div>
-</div>
-</div>
-</div>
-</section>
-<!-- Options & Toggles -->
-<section class="space-y-2">
-<!-- Visibility Setting -->
-<div class="flex items-center justify-between p-4 bg-surface-pure rounded-xl border border-soft-border tap-scale cursor-pointer">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-on-surface-variant">visibility</span>
-<span class="font-body-md text-body-md font-medium">Post Visibility</span>
-</div>
-<div class="flex items-center gap-2">
-<span class="text-primary font-bold text-body-md">Public</span>
-<span class="material-symbols-outlined text-outline">chevron_right</span>
-</div>
-</div>
-<!-- Share to toggle -->
-<div class="flex items-center justify-between p-4 bg-surface-pure rounded-xl border border-soft-border">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-on-surface-variant">share</span>
-<span class="font-body-md text-body-md font-medium">Share to Instagram</span>
-</div>
-<button class="w-11 h-6 bg-surface-container-highest rounded-full p-0.5 transition-colors duration-200 ease-in-out focus:outline-none" onclick="this.classList.toggle('bg-primary'); this.querySelector('div').classList.toggle('translate-x-5')">
-<div class="w-5 h-5 bg-surface-pure rounded-full shadow-md transform transition-transform duration-200 ease-in-out"></div>
-</button>
-</div>
-<!-- Advanced Tags -->
-<div class="flex items-center justify-between p-4 bg-surface-pure rounded-xl border border-soft-border tap-scale cursor-pointer">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-on-surface-variant">sell</span>
-<span class="font-body-md text-body-md font-medium">Tag Friends</span>
-</div>
-<span class="material-symbols-outlined text-outline">add</span>
-</div>
-</section>
-</main>
-<!-- Sticky Tooltip/Bar (Optional Micro-interaction) -->
-<div class="fixed bottom-0 left-0 w-full flex justify-center pointer-events-none" id="footer-actions">
-<div class="w-full max-w-md mx-auto bg-surface/90 backdrop-blur-md border-t border-soft-border flex items-center justify-around h-20 pb-safe-area px-6">
-  <button class="flex flex-col items-center justify-center gap-1 text-primary transition-colors">
-    <span class="material-symbols-outlined text-2xl">image</span>
-    <span class="font-technical-label text-[12px] font-medium">Photo</span>
-    <div class="absolute top-0 w-8 h-1 bg-primary rounded-b-full"></div>
-  </button>
-  <button class="flex flex-col items-center justify-center gap-1 text-on-surface-variant hover:text-primary transition-colors">
-    <span class="material-symbols-outlined text-2xl">videocam</span>
-    <span class="font-technical-label text-[12px] font-medium">Video</span>
-  </button>
-  <div class="relative -top-4">
-    <button class="w-14 h-14 bg-primary text-surface-pure rounded-full shadow-lg flex items-center justify-center tap-scale">
-      <span class="material-symbols-outlined text-3xl">add</span>
-    </button>
-  </div>
-  <button class="flex flex-col items-center justify-center gap-1 text-on-surface-variant hover:text-primary transition-colors">
-    <span class="material-symbols-outlined text-2xl">alternate_email</span>
-    <span class="font-technical-label text-[12px] font-medium">Mention</span>
-  </button>
-  <button class="flex flex-col items-center justify-center gap-1 text-on-surface-variant hover:text-primary transition-colors">
-    <span class="material-symbols-outlined text-2xl">tag</span>
-    <span class="font-technical-label text-[12px] font-medium">Hash</span>
-  </button>
-</div>
-</div>
-<script>
-    // Micro-interaction for feedback
-    document.querySelectorAll('.tap-scale').forEach(button => {
-      button.addEventListener('click', () => {
-        // Handle logic here if needed
-      });
-    });
-
-    // Simple scroll effect for top bar shadow
-    window.addEventListener('scroll', () => {
-      const header = document.querySelector('header');
-      if (window.scrollY > 0) {
-        header.classList.add('shadow-md');
-        header.classList.remove('shadow-sm');
-      } else {
-        header.classList.add('shadow-sm');
-        header.classList.remove('shadow-md');
       }
-    });
-  </script>
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
+    </style>
+</head>
+<body class="bg-background dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface font-body-md min-h-screen">
+<!-- Header -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
+<button onclick="cancelPost()" class="p-2 rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-on-surface dark:text-inverse-on-surface">close</span>
+</button>
+<h1 class="text-headline-md font-headline-md text-primary tracking-tight">New Post</h1>
+<button id="postBtn" onclick="submitPost()" class="bg-primary text-on-primary px-5 py-2 rounded-full font-bold text-sm hover:-translate-y-px transition-all">Post</button>
+</header>
 
+<main class="mt-20 px-margin-page max-w-2xl mx-auto space-y-6 pb-8">
+<!-- Image Upload Area -->
+<div id="imageArea" onclick="pickImage()" class="bg-surface-pure dark:bg-white/5 rounded-2xl border-2 border-dashed border-outline-variant dark:border-white/20 p-8 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-primary/50 transition-colors min-h-[200px]">
+    <span class="material-symbols-outlined text-4xl text-muted-zinc">add_photo_alternate</span>
+    <p class="text-muted-zinc font-bold">Tap to add a photo</p>
+    <p class="text-muted-zinc text-xs">Share your discovery with the world</p>
+</div>
 
+<!-- Caption Input -->
+<div class="bg-surface-pure dark:bg-white/5 rounded-xl whisper-shadow border border-soft-border dark:border-white/10 p-4">
+    <textarea id="captionInput" class="w-full bg-transparent border-none focus:ring-0 text-on-surface dark:text-inverse-on-surface placeholder-muted-zinc font-body-md resize-none outline-none" rows="4" placeholder="What did you discover? ✨"></textarea>
+</div>
+
+<!-- Location Tag -->
+<div id="locationTag" class="bg-surface-pure dark:bg-white/5 rounded-xl whisper-shadow border border-soft-border dark:border-white/10 p-4 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+        <span class="material-symbols-outlined text-primary">location_on</span>
+    </div>
+    <div class="flex-1">
+        <p class="font-bold text-on-surface dark:text-inverse-on-surface text-sm">Add Location</p>
+        <p id="locationLabel" class="text-muted-zinc text-xs">Your current location will be tagged</p>
+    </div>
+    <span class="material-symbols-outlined text-outline-variant">chevron_right</span>
+</div>
+
+<!-- Posting indicator (hidden by default) -->
+<div id="postingOverlay" class="hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center">
+    <div class="bg-surface-pure dark:bg-inverse-surface rounded-2xl p-8 flex flex-col items-center gap-4 whisper-shadow">
+        <span class="material-symbols-outlined text-primary animate-spin text-4xl">progress_activity</span>
+        <p class="font-bold text-on-surface dark:text-inverse-on-surface">Creating your post...</p>
+        <div id="uploadProgress" class="w-48 h-1.5 bg-surface-container rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-primary rounded-full transition-all" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+</main>
+
+<script>
+        let hasImage = false;
+
+        function cancelPost() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'cancelPost' }));
+        }
+
+        function pickImage() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'pickImage' }));
+        }
+
+        function setImagePreview(uri) {
+            const area = document.getElementById('imageArea');
+            area.innerHTML = '<img class="w-full rounded-xl object-cover max-h-[400px]" src="' + uri + '"><div class="absolute top-2 right-2 bg-black/50 backdrop-blur-md p-2 rounded-full cursor-pointer" onclick="event.stopPropagation(); pickImage();"><span class="material-symbols-outlined text-white text-sm">edit</span></div>';
+            area.classList.remove('border-dashed', 'p-8');
+            area.classList.add('relative', 'overflow-hidden', 'p-0');
+            hasImage = true;
+        }
+
+        function setLocationLabel(label) {
+            document.getElementById('locationLabel').textContent = label || 'Location tagged';
+        }
+
+        function submitPost() {
+            const caption = document.getElementById('captionInput').value.trim();
+            if (!hasImage && !caption) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'showError', message: 'Please add a photo or write a caption.' }));
+                return;
+            }
+            document.getElementById('postingOverlay').classList.remove('hidden');
+            document.getElementById('postBtn').disabled = true;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'submitPost',
+                caption: caption
+            }));
+        }
+
+        function updateProgress(pct) {
+            document.getElementById('progressBar').style.width = pct + '%';
+        }
+
+        function onPostComplete() {
+            document.getElementById('postingOverlay').classList.add('hidden');
+            document.getElementById('postBtn').disabled = false;
+        }
+
+        function onPostError() {
+            document.getElementById('postingOverlay').classList.add('hidden');
+            document.getElementById('postBtn').disabled = false;
+        }
+    </script>
 </body></html>`;
+};
 
-export default function CreatePost() {
+export default function CreatePost({ navigation }) {
+  const { user } = useAuth();
+  const isDark = useThemeStore((state) => state.isDark);
+  const { currentLocation } = useLocationStore();
+  const webViewRef = useRef(null);
+  const [selectedImageUri, setSelectedImageUri] = useState(null);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
+  const handleMessage = async (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+
+      if (data.action === 'cancelPost') {
+        navigation.goBack();
+      }
+      else if (data.action === 'pickImage') {
+        const permResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permResult.granted) {
+          Alert.alert('Permission Needed', 'Please grant photo library access to upload images.');
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [4, 5],
+          quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const uri = result.assets[0].uri;
+          setSelectedImageUri(uri);
+          webViewRef.current?.injectJavaScript(`setImagePreview('${uri}'); true;`);
+        }
+      }
+      else if (data.action === 'submitPost') {
+        if (!user) {
+          Alert.alert('Login Required', 'Please log in to create a post.');
+          webViewRef.current?.injectJavaScript(`onPostError(); true;`);
+          return;
+        }
+
+        // Create a promise that rejects after 15 seconds
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Post creation timeout')), 15000);
+        });
+
+        try {
+          // Race the submission against the timeout
+          await Promise.race([
+            (async () => {
+              let imageURL = '';
+              if (selectedImageUri) {
+                imageURL = await uploadPostImage(user.uid, selectedImageUri, (progress) => {
+                  webViewRef.current?.injectJavaScript(`updateProgress(${progress}); true;`);
+                });
+              }
+
+              const lat = currentLocation?.latitude || null;
+              const lng = currentLocation?.longitude || null;
+              const geoHash = (lat && lng) ? encodeGeoHash(lat, lng) : null;
+
+              await createPost(user.uid, {
+                caption: data.caption || '',
+                imageURL,
+                geoHash,
+                lat,
+                lng,
+                locationLabel: currentLocation ? 'Current Location' : '',
+              });
+            })(),
+            timeoutPromise
+          ]);
+
+          webViewRef.current?.injectJavaScript(`onPostComplete(); true;`);
+          Alert.alert('Success', 'Your post has been shared!', [
+            { text: 'OK', onPress: () => navigation.goBack() }
+          ]);
+        } catch (error) {
+          console.error('[CreatePost] Error creating post:', error);
+          webViewRef.current?.injectJavaScript(`onPostError(); true;`);
+          if (error.message === 'Post creation timeout') {
+            Alert.alert('Timeout', 'Post creation took too long. Please check your connection and try again.');
+          } else {
+            Alert.alert('Error', 'Failed to create post. Please try again.');
+          }
+        }
+      }
+      else if (data.action === 'showError') {
+        Alert.alert('Missing Content', data.message);
+      }
+    } catch (error) {
+      console.error('[CreatePost] Error handling message:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
-        source={{ html: htmlContent }} 
+        ref={webViewRef}
+        source={{ html: getHtmlContent(isDark) }} 
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onMessage={handleMessage}
       />
     </SafeAreaView>
   );

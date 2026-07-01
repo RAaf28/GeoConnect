@@ -15,12 +15,15 @@ import ExploreMapScreen from "./src/screens/ExploreMap/ExploreMap";
 import ProfileScreen from "./src/screens/Profile/Profile";
 import NotificationsScreen from "./src/screens/Notifications/Notifications";
 import SettingsScreen from "./src/screens/Settings/Settings";
-import SettingsUpdatedScreen from "./src/screens/SettingsUpdated/SettingsUpdated";
+// SettingsUpdated removed — was a non-functional duplicate of Settings
 import PrivacySettingsScreen from "./src/screens/PrivacySettings/PrivacySettings";
 import PlacesCheckinScreen from "./src/screens/PlacesCheckin/PlacesCheckin";
 import NearbyEventsScreen from "./src/screens/NearbyEvents/NearbyEvents";
 import ExploreMapEventsScreen from "./src/screens/ExploreMapEvents/ExploreMapEvents";
 import CreatePostScreen from "./src/screens/CreatePost/CreatePost";
+import CreateEventScreen from "./src/screens/CreateEvent/CreateEvent";
+import EventDetailScreen from "./src/screens/EventDetail/EventDetail";
+import PostDetailScreen from "./src/screens/PostDetail/PostDetail";
 import LoginScreen from "./src/screens/Login/Login";
 import RegisterScreen from "./src/screens/Register/Register";
 import ForgotPasswordScreen from "./src/screens/ForgotPassword/ForgotPassword";
@@ -136,11 +139,7 @@ const AppStack = () => (
       component={SettingsScreen}
       options={{ animation: "slide_from_right" }}
     />
-    <Stack.Screen
-      name="SettingsUpdated"
-      component={SettingsUpdatedScreen}
-      options={{ animation: "slide_from_right" }}
-    />
+
     <Stack.Screen
       name="PrivacySettings"
       component={PrivacySettingsScreen}
@@ -159,6 +158,21 @@ const AppStack = () => (
     <Stack.Screen
       name="ExploreMapEvents"
       component={ExploreMapEventsScreen}
+      options={{ animation: "slide_from_right" }}
+    />
+    <Stack.Screen
+      name="CreateEvent"
+      component={CreateEventScreen}
+      options={{ presentation: "modal", animation: "slide_from_bottom" }}
+    />
+    <Stack.Screen
+      name="EventDetail"
+      component={EventDetailScreen}
+      options={{ animation: "slide_from_right" }}
+    />
+    <Stack.Screen
+      name="PostDetail"
+      component={PostDetailScreen}
       options={{ animation: "slide_from_right" }}
     />
   </Stack.Navigator>

@@ -1,7 +1,9 @@
-import React from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import { useThemeStore } from '../../store/stores';
+import { sendPasswordReset } from '../../services/authService';
 
 const htmlContent = `<!DOCTYPE html><html class="light" lang="en" style=""><head>
 <meta charset="utf-8">
@@ -191,22 +193,34 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en" style=""><head
         function handleReset(event) {
             event.preventDefault();
             const btn = document.getElementById('submitBtn');
-            const form = document.getElementById('resetForm');
-            const success = document.getElementById('successState');
             const email = document.getElementById('email').value;
 
             // Loading state
             btn.disabled = true;
             btn.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span> Sending...';
 
-            // Simulate API call
-            setTimeout(() => {
-                form.classList.add('hidden');
-                success.classList.remove('hidden');
-                
-                // Add entry animation to success state
-                success.classList.add('animate-in', 'fade-in', 'slide-in-from-bottom-4', 'duration-500');
-            }, 1500);
+            // Send message to React Native
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'performReset',
+                email: email
+            }));
+        }
+
+        function handleResetSuccess() {
+            const form = document.getElementById('resetForm');
+            const success = document.getElementById('successState');
+            
+            form.classList.add('hidden');
+            success.classList.remove('hidden');
+            
+            // Add entry animation to success state
+            success.classList.add('animate-in', 'fade-in', 'slide-in-from-bottom-4', 'duration-500');
+        }
+
+        function handleResetFailure() {
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = false;
+            btn.innerHTML = '<span>Send Reset Link</span><span class="material-symbols-outlined text-[20px]">send</span>';
         }
 
         // Simple entrance animation for the card
@@ -227,21 +241,48 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en" style=""><head
 </body></html>`;
 
 export default function ForgotPassword({ navigation }) {
+  const webViewRef = useRef(null);
+  const isDark = useThemeStore((state) => state.isDark);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
+        ref={webViewRef}
         source={{ html: htmlContent }} 
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         // Add basic message handling for potential future navigation
-        onMessage={(event) => {
-          const action = event.nativeEvent.data;
-          if (action === 'goBack') navigation.goBack();
-          else if (action === 'navigateRegister') navigation.navigate('Register');
-          else if (action === 'navigateLogin') navigation.navigate('Login');
-          else if (action === 'navigateForgot') navigation.navigate('ForgotPassword');
+        onMessage={async (event) => {
+          const message = event.nativeEvent.data;
+          if (message === 'goBack') navigation.goBack();
+          else if (message === 'navigateRegister') navigation.navigate('Register');
+          else if (message === 'navigateLogin') navigation.navigate('Login');
+          else if (message === 'navigateForgot') navigation.navigate('ForgotPassword');
+          else {
+            try {
+              const data = JSON.parse(message);
+              if (data.action === 'performReset') {
+                await sendPasswordReset(data.email);
+                webViewRef.current?.injectJavaScript(`handleResetSuccess(); true;`);
+              }
+            } catch (error) {
+              if (error instanceof SyntaxError) {
+                // Ignore standard string actions
+              } else {
+                Alert.alert("Reset Password Error", error.message);
+                webViewRef.current?.injectJavaScript(`handleResetFailure(); true;`);
+              }
+            }
+          }
         }}
       />
     </SafeAreaView>

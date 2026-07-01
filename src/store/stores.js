@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Auth Store
+// ===== Auth Store =====
 export const useAuthStore = create((set) => ({
   user: null,
   loading: true,
@@ -14,7 +14,7 @@ export const useAuthStore = create((set) => ({
   logout: () => set({ user: null, error: null }),
 }));
 
-// Location Store
+// ===== Location Store =====
 export const useLocationStore = create(
   persist(
     (set) => ({
@@ -33,7 +33,7 @@ export const useLocationStore = create(
   ),
 );
 
-// Feed Store
+// ===== Feed Store =====
 export const useFeedStore = create((set) => ({
   posts: [],
   loading: false,
@@ -41,11 +41,50 @@ export const useFeedStore = create((set) => ({
 
   setPosts: (posts) => set({ posts }),
   addPost: (post) => set((state) => ({ posts: [post, ...state.posts] })),
+  removePost: (postId) =>
+    set((state) => ({
+      posts: state.posts.filter((p) => p.id !== postId),
+    })),
+  updatePost: (postId, updates) =>
+    set((state) => ({
+      posts: state.posts.map((p) =>
+        p.id === postId ? { ...p, ...updates } : p,
+      ),
+    })),
+  // Like/unlike helpers that update local state optimistically
+  likePostLocal: (postId) =>
+    set((state) => ({
+      posts: state.posts.map((p) =>
+        p.id === postId
+          ? { ...p, likesCount: (p.likesCount || 0) + 1, isLiked: true }
+          : p,
+      ),
+    })),
+  unlikePostLocal: (postId) =>
+    set((state) => ({
+      posts: state.posts.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              likesCount: Math.max(0, (p.likesCount || 0) - 1),
+              isLiked: false,
+            }
+          : p,
+      ),
+    })),
+  incrementCommentCount: (postId) =>
+    set((state) => ({
+      posts: state.posts.map((p) =>
+        p.id === postId
+          ? { ...p, commentsCount: (p.commentsCount || 0) + 1 }
+          : p,
+      ),
+    })),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
 }));
 
-// Theme Store
+// ===== Theme Store =====
 export const useThemeStore = create(
   persist(
     (set) => ({
@@ -61,7 +100,7 @@ export const useThemeStore = create(
   ),
 );
 
-// Privacy Store
+// ===== Privacy Store =====
 export const usePrivacyStore = create(
   persist(
     (set) => ({
@@ -89,3 +128,33 @@ export const usePrivacyStore = create(
     },
   ),
 );
+
+// ===== Notification Store =====
+export const useNotificationStore = create((set) => ({
+  notifications: [],
+  unreadCount: 0,
+  loading: false,
+  error: null,
+
+  setNotifications: (notifications) => set({ notifications }),
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: [notification, ...state.notifications],
+      unreadCount: state.unreadCount + 1,
+    })),
+  markAsReadLocal: (notificationId) =>
+    set((state) => ({
+      notifications: state.notifications.map((n) =>
+        n.id === notificationId ? { ...n, read: true } : n,
+      ),
+      unreadCount: Math.max(0, state.unreadCount - 1),
+    })),
+  markAllReadLocal: () =>
+    set((state) => ({
+      notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      unreadCount: 0,
+    })),
+  setUnreadCount: (count) => set({ unreadCount: count }),
+  setLoading: (loading) => set({ loading }),
+  setError: (error) => set({ error }),
+}));

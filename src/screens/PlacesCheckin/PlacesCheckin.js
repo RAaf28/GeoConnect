@@ -1,24 +1,31 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { WebView } from 'react-native-webview';
+import { useAuth } from '../../hooks/useAuth';
+import { useThemeStore, useLocationStore } from '../../store/stores';
+import { getNearbyPlaces } from '../../services/placesAPI';
+import { createCheckin, getCheckinsForVenue } from '../../services/firestoreService';
 
-const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
+const getHtmlContent = (isDark) => {
+  return `<!DOCTYPE html><html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
 <style>
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }
         .glass-panel {
-            background: rgba(252, 248, 255, 0.8);
+            background: rgba(252, 248, 255, 0.85);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
+        }
+        .dark .glass-panel {
+            background: rgba(27, 27, 35, 0.85);
+            border-color: rgba(255, 255, 255, 0.1);
         }
         .whisper-shadow {
             box-shadow: 0 10px 30px -5px rgba(70, 72, 212, 0.08), 0 4px 12px -2px rgba(70, 72, 212, 0.03);
@@ -35,9 +42,11 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
             background-image: radial-gradient(circle at 2px 2px, #e1e0ff 1px, transparent 0);
             background-size: 40px 40px;
         }
-        /* Custom spring physics for detail sheet */
+        .dark .map-canvas {
+            background-image: radial-gradient(circle at 2px 2px, #303048 1px, transparent 0);
+        }
         .detail-sheet {
-            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
         }
     </style>
 <script id="tailwind-config">
@@ -131,23 +140,18 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
         }
     </script>
 </head>
-<body class="bg-background text-on-surface font-body-md min-h-screen overflow-x-hidden">
+<body class="bg-background dark:bg-inverse-surface text-on-background dark:text-inverse-on-surface font-body-md min-h-screen overflow-x-hidden">
 <!-- Top Navigation Bar -->
-<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm">
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm">
 <nav class="flex justify-between items-center px-margin-page h-16 w-full">
 <div class="flex items-center gap-2">
 <span class="material-symbols-outlined text-primary text-headline-md">explore</span>
 <h1 class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</h1>
 </div>
 <div class="flex items-center gap-4">
-<button class="p-2 rounded-full hover:bg-surface-variant/50 transition-colors text-on-surface-variant">
+<button class="p-2 rounded-full hover:bg-surface-variant/50 dark:hover:bg-surface-container-highest/20 transition-colors text-on-surface-variant dark:text-inverse-on-surface" onclick="performSearch()">
 <span class="material-symbols-outlined">search</span>
 </button>
-<div class="hidden md:flex gap-6">
-<a class="text-primary font-bold -translate-y-px transition-transform duration-200" href="#">Explore</a>
-<a class="text-on-surface-variant hover:bg-surface-variant/50 transition-colors" href="#">Feed</a>
-<a class="text-on-surface-variant hover:bg-surface-variant/50 transition-colors" href="#">Alerts</a>
-</div>
 </div>
 </nav>
 </header>
@@ -156,18 +160,11 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 <!-- Abstract Map Layer -->
 <div class="absolute inset-0 z-0 map-canvas flex items-center justify-center">
 <div class="relative w-full h-full opacity-40">
-<!-- Marker 1: Active -->
 <div class="absolute top-1/4 left-1/3 animate-pulse">
 <div class="w-12 h-12 bg-primary rounded-full border-4 border-white shadow-xl flex items-center justify-center overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="A modern, sunlit boutique cafe interior with minimalist wooden furniture and hanging pendant lights. The image has a clean, airy aesthetic with soft morning light streaming through large glass windows, highlighting lush indoor plants in the corner." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLe_ygiAF60MJFXoN9ZuxYCqt36xs0apTpNCCsd7-dI-S0gIUCyAaZxKOM5msbVn6LoKCxuffp-CsN8t4kNZfTO357HjvSjCfca724Ck1pztw_VFblZkftL4ifFfMB8BU2BbM5k3DYbQR6V0UqbRflnHKBCmvd2LL5lUTTeiWFJcgAIdbXsZbH_qSjK-bAMrRPh3pPpbGulKBtXri5cuNgdrhvz2MID-KsxxBuM0zYn-E9NuIqyffj8lK43TsOypb7uwzVqq4SMIE">
+<span class="material-symbols-outlined text-white">location_on</span>
 </div>
 <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-tertiary-container border-2 border-white rounded-full"></div>
-</div>
-<!-- Marker 2: Standard -->
-<div class="absolute top-1/2 left-1/2">
-<div class="w-10 h-10 bg-secondary rounded-full border-2 border-white shadow-lg flex items-center justify-center overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="A serene city park with a modern geometric sculpture at the center of a circular walking path. The landscape features manicured lawns, tall vibrant trees in the golden hour light, and a soft-focus urban skyline in the distant background under a clear blue sky." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOjvkDZZHK8pxpM0CoipYY4Y-i4B4IymF_ARLkVPQW93lFbk4etuk4s-T4wJvXfZoCIvcPTfdmtZ7XZs6F4xEjw9MzCJu8BnBWxuEB_tMjJFaujZymckJuWBU3r5-cRAVLgn6dvUUbuZFKBq-lVINGpsr2MdzZb3m34y5stUbN3J_uLFa0N6n05-RCDf11Y9KVhvHwJMBTcNWZL3yHp1wqhYsVjEVTRvXgEvf93-nDjJCyudo8Nusyh59DY-uicnhjE2j4t9z1yuQ">
-</div>
 </div>
 </div>
 </div>
@@ -175,241 +172,390 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 <section class="relative z-10 p-margin-page pointer-events-none">
 <div class="max-w-xl mx-auto space-y-4 pointer-events-auto">
 <!-- Search Bar -->
-<div class="glass-panel rounded-xl whisper-shadow p-2 flex items-center gap-3 border border-soft-border stagger-reveal" style="animation-delay: 0s;">
+<div class="glass-panel rounded-xl whisper-shadow p-2 flex items-center gap-3 border border-soft-border dark:border-white/10 stagger-reveal" style="animation-delay: 0s;">
 <div class="pl-3 text-muted-zinc">
 <span class="material-symbols-outlined">location_on</span>
 </div>
-<input class="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-muted-zinc font-body-md py-2" placeholder="Where are you exploring today?" type="text">
-<button class="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:-translate-y-px transition-all">
-<span class="material-symbols-outlined text-[20px]">filter_list</span>
-<span class="">Filters</span>
+<input id="searchInput" class="bg-transparent border-none focus:ring-0 w-full text-on-surface dark:text-inverse-on-surface placeholder-muted-zinc font-body-md py-2 outline-none" placeholder="Where are you exploring today?" type="text" onkeypress="handleSearchKeyPress(event)">
+<button onclick="performSearch()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:-translate-y-px transition-all">
+<span class="material-symbols-outlined text-[20px]">search</span>
+<span class="">Search</span>
 </button>
 </div>
 <!-- Category Chips -->
 <div class="flex gap-2 overflow-x-auto pb-2 no-scrollbar stagger-reveal" style="animation-delay: 0.1s;">
-<button class="flex-shrink-0 bg-primary-container text-on-primary-container px-5 py-2 rounded-full font-bold text-body-md whisper-shadow flex items-center gap-2">
+<button id="chip-Cafe" onclick="selectCategory('Cafe')" class="flex-shrink-0 bg-primary text-white px-5 py-2 rounded-full font-bold text-body-md whisper-shadow flex items-center gap-2">
 <span class="material-symbols-outlined text-[18px]">local_cafe</span>
 <span class="">Cafes</span>
 </button>
-<button class="flex-shrink-0 glass-panel text-on-surface-variant px-5 py-2 rounded-full font-medium text-body-md border border-soft-border hover:bg-surface-variant/40 transition-colors flex items-center gap-2">
+<button id="chip-Park" onclick="selectCategory('Park')" class="flex-shrink-0 glass-panel text-on-surface-variant dark:text-inverse-on-surface px-5 py-2 rounded-full font-medium text-body-md border border-soft-border hover:bg-surface-variant/40 dark:hover:bg-white/10 transition-colors flex items-center gap-2">
 <span class="material-symbols-outlined text-[18px]">park</span>
 <span class="">Parks</span>
 </button>
-<button class="flex-shrink-0 glass-panel text-on-surface-variant px-5 py-2 rounded-full font-medium text-body-md border border-soft-border hover:bg-surface-variant/40 transition-colors flex items-center gap-2">
+<button id="chip-Mall" onclick="selectCategory('Mall')" class="flex-shrink-0 glass-panel text-on-surface-variant dark:text-inverse-on-surface px-5 py-2 rounded-full font-medium text-body-md border border-soft-border hover:bg-surface-variant/40 dark:hover:bg-white/10 transition-colors flex items-center gap-2">
 <span class="material-symbols-outlined text-[18px]">shopping_bag</span>
 <span class="">Malls</span>
 </button>
-<button class="flex-shrink-0 glass-panel text-on-surface-variant px-5 py-2 rounded-full font-medium text-body-md border border-soft-border hover:bg-surface-variant/40 transition-colors flex items-center gap-2">
+<button id="chip-Culture" onclick="selectCategory('Culture')" class="flex-shrink-0 glass-panel text-on-surface-variant dark:text-inverse-on-surface px-5 py-2 rounded-full font-medium text-body-md border border-soft-border hover:bg-surface-variant/40 dark:hover:bg-white/10 transition-colors flex items-center gap-2">
 <span class="material-symbols-outlined text-[18px]">museum</span>
 <span class="">Culture</span>
 </button>
 </div>
 </div>
 </section>
-<!-- Trending Side Bar (Desktop) / Carousel (Mobile) -->
-<aside class="absolute left-margin-page top-64 bottom-margin-page w-80 hidden lg:flex flex-col gap-4 z-10">
-<h3 class="text-headline-md font-headline-md text-on-surface-variant stagger-reveal" style="animation-delay: 0.2s;">Trending Now</h3>
-<div class="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar">
-<!-- Trending Card 1 -->
-<div class="glass-panel border border-soft-border rounded-xl p-4 whisper-shadow stagger-reveal cursor-pointer group" onclick="toggleDetail()" style="animation-delay: 0.3s;">
-<div class="relative h-32 rounded-lg overflow-hidden mb-3">
-<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A trendy urban coffee shop with industrial aesthetics, featuring exposed brick walls, sleek black furniture, and large windows. The lighting is warm and inviting, with a vibrant coffee bar illuminated by neon accents, creating a high-contrast and sophisticated modern atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrnsxRXjibSBwD_xcv8jF2V6ybTAeEXdHhIEmoDvG5hwGNaS9SQBiVHJiIKFfoh6gkl0ac2U1rXwf6S62NV3WuFr7CCtuMgW9XJAtAQOh4aLhssQejR1hBzB1Y60rdos82pZYCd9l9Jb7S355heSvpWEOd0dSsnwwoCRsRcNy5qwKDoP1nTB7O5baSCX5MoPPEEtf-MDyk_NgDx_2SDQzsrH3MXkxEm42nQTn5x94EyQBPHwB6dO-odxDkkcJZKMkdAuQxtRClTWw">
-<div class="absolute top-2 right-2 bg-primary/90 text-white text-[10px] px-2 py-1 rounded-full font-technical-label">4.9 ★</div>
-</div>
-<h4 class="font-headline-md text-[18px] leading-tight mb-1">The Kinetic Brew</h4>
-<p class="text-muted-zinc text-body-md mb-2">Modernism &amp; Espresso</p>
-<div class="flex items-center justify-between">
-<span class="text-primary font-technical-label text-[12px]">2.4km away</span>
-<div class="flex -space-x-2">
-<div class="w-6 h-6 rounded-full border-2 border-surface-pure overflow-hidden bg-muted-zinc"></div>
-<div class="w-6 h-6 rounded-full border-2 border-surface-pure overflow-hidden bg-primary"></div>
-<div class="flex items-center justify-center w-6 h-6 rounded-full border-2 border-surface-pure bg-surface-variant text-[8px] font-bold">+12</div>
-</div>
-</div>
-</div>
-<!-- Trending Card 2 -->
-<div class="glass-panel border border-soft-border rounded-xl p-4 whisper-shadow stagger-reveal cursor-pointer group" style="animation-delay: 0.4s;">
-<div class="relative h-32 rounded-lg overflow-hidden mb-3">
-<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A futuristic urban park with geometric concrete structures and glowing integrated path lights. Lush greenery and modern white benches create a clean, minimalist outdoor space designed for exploration and relaxation, under a twilight sky with soft purple and blue tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmBP5y60d-J0Ut-V3ZzAD_tiHYstx35gf9XSGk5_8_V0HJTmDR-8eTvFD7cExJl90HPxn6JNirDA3HbiJVNKzQT_yhq3VqcPe0hdhSxMPZf7EzwiMQqvb6L-zHLVakppcv4vRrwPNLIVp59ANeQv5uREeaWJxCaTW88yBFMAx28kMP999TM95aXrR862_2nKmaAsOy-zNTYYSPEXf0TXKxgXs0hbkhmcFSBOrnyH_D6cDYQcBQ7MvCs0Bqx_BIMfwmobnJThs4FJQ">
-<div class="absolute top-2 right-2 bg-primary/90 text-white text-[10px] px-2 py-1 rounded-full font-technical-label">4.7 ★</div>
-</div>
-<h4 class="font-headline-md text-[18px] leading-tight mb-1">Vertex Plaza</h4>
-<p class="text-muted-zinc text-body-md mb-2">Public Arts &amp; Tech</p>
-<div class="flex items-center justify-between">
-<span class="text-primary font-technical-label text-[12px]">0.8km away</span>
-<div class="flex -space-x-2">
-<div class="w-6 h-6 rounded-full border-2 border-surface-pure bg-secondary"></div>
-<div class="w-6 h-6 rounded-full border-2 border-surface-pure bg-tertiary"></div>
-</div>
-</div>
-</div>
+
+<!-- Places Sidebar -->
+<aside class="absolute left-4 right-4 lg:right-auto lg:w-80 top-60 bottom-24 lg:bottom-margin-page flex flex-col gap-4 z-10 bg-white/85 dark:bg-inverse-surface/85 backdrop-blur-md p-4 rounded-2xl border border-soft-border dark:border-white/10 overflow-hidden shadow-xl stagger-reveal" style="animation-delay: 0.2s;">
+<h3 class="text-headline-md font-headline-md text-on-surface-variant dark:text-inverse-on-surface">Nearby Places</h3>
+<div id="placesList" class="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar">
+    <div class="text-center text-muted-zinc py-8">
+        <span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
+        <p class="mt-2">Loading nearby spots...</p>
+    </div>
 </div>
 </aside>
-<!-- Place Detail Screen (Slide-up Sheet) -->
-<div class="fixed inset-x-0 bottom-0 md:inset-x-auto md:right-margin-page md:top-24 md:bottom-24 md:w-96 z-[60] bg-surface-pure rounded-t-[32px] md:rounded-[32px] shadow-2xl detail-sheet translate-y-full flex flex-col border border-soft-border overflow-hidden" id="detailSheet">
+
+<!-- Place Detail Slide-up Sheet -->
+<div class="fixed inset-x-0 bottom-0 md:inset-x-auto md:right-margin-page md:top-24 md:bottom-24 md:w-96 z-[60] bg-surface-pure dark:bg-inverse-surface rounded-t-[32px] md:rounded-[32px] shadow-2xl detail-sheet translate-y-full flex flex-col border border-soft-border dark:border-white/10 overflow-hidden" id="detailSheet">
 <!-- Drag Handle -->
 <div class="w-full flex justify-center py-4 md:hidden">
-<div class="w-12 h-1.5 bg-surface-variant rounded-full cursor-pointer" onclick="toggleDetail()"></div>
+<div class="w-12 h-1.5 bg-surface-variant dark:bg-white/10 rounded-full cursor-pointer" onclick="toggleDetail()"></div>
 </div>
 <!-- Content Container -->
 <div class="flex-1 overflow-y-auto px-6 pb-4 md:pb-6">
 <!-- Header Actions -->
 <div class="flex justify-between items-center mb-6 pt-2 md:pt-4">
-<button class="p-2 rounded-full bg-surface-container hover:bg-surface-variant transition-colors" onclick="toggleDetail()">
+<button class="p-2 rounded-full bg-surface-container dark:bg-white/10 hover:bg-surface-variant dark:hover:bg-white/20 transition-colors text-on-surface dark:text-inverse-on-surface" onclick="toggleDetail()">
 <span class="material-symbols-outlined">close</span>
 </button>
-<div class="flex gap-2">
-<button class="p-2 rounded-full bg-surface-container hover:bg-surface-variant transition-colors">
-<span class="material-symbols-outlined">share</span>
-</button>
-<button class="p-2 rounded-full bg-surface-container hover:bg-surface-variant transition-colors">
-<span class="material-symbols-outlined">bookmark</span>
-</button>
-</div>
 </div>
 <!-- Venue Info -->
 <div class="mb-6">
-<div class="flex items-baseline gap-2 mb-1">
-<h2 class="text-headline-lg font-headline-lg">The Kinetic Brew</h2>
-<span class="text-primary font-technical-label">Verified</span>
-</div>
+<h2 id="detailName" class="text-headline-lg font-headline-lg mb-1 text-on-surface dark:text-inverse-on-surface">Venue Name</h2>
 <div class="flex items-center gap-3 text-muted-zinc mb-4">
 <div class="flex items-center gap-1">
-<span class="material-symbols-outlined text-[16px] text-tertiary">star</span>
-<span class="font-bold text-on-surface">4.9</span>
-<span class="">(1,240 reviews)</span>
+<span class="material-symbols-outlined text-[16px] text-yellow-500">star</span>
+<span id="detailRating" class="font-bold text-on-surface dark:text-inverse-on-surface">4.9</span>
 </div>
 <span class="w-1 h-1 bg-muted-zinc rounded-full"></span>
-<span class="">Cafe &amp; Workspace</span>
+<span id="detailCategory" class="">Category</span>
 </div>
+<p id="detailAddress" class="text-muted-zinc text-body-md mb-4">123 Address Rd.</p>
 <!-- Photos Grid -->
 <div class="grid grid-cols-2 gap-2 mb-6">
 <div class="aspect-square rounded-xl overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="Close-up of an expertly crafted latte art in a white ceramic cup. The setting is a minimalist cafe table with a soft bokeh background of warm wood tones and professional coffee-making equipment, emphasizing a high-end gourmet experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLJiefIgOyKNhc5CG_gcZhu7FaUIDcm40bTvN-hKvZX94lDibYmBeKGVTYRx2XhfYoQlF2O2Hd1Juh9O2IlywUSDxpQg1Tvenp8mchyxVB_L4IU_iEb9rSrWdwC-aORDq12TbVA_bLZzT3Psk1sQpZxYt58H9x_-wQ8c4VGR2tdT61Kmwijl-loCz3R0WLUzBybWdQcfAVu6HGrJ59FRqBNg0vXXGB7ba88bzUZrUp-eGoKxUCWM0881dLDyin_n81809IXOtoj_M">
+<img id="detailImage1" class="w-full h-full object-cover" src="">
 </div>
 <div class="grid grid-rows-2 gap-2">
 <div class="rounded-xl overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="A collection of artisan pastries arranged on a sleek marble counter inside a contemporary bakery. The lighting is bright and clean, reflecting a high-quality food presentation in a modern urban environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgyqdp7aXgWsQINFPPRRU1wUElmL6on_8AJIT9bEiPm3bipgb2wZeApd0eeft4lnw8b0sTUAbKbWJ5kRBb5bO3odfEQ6E9nkC1sncjU9c9D0Rg_GkDtLOjD-JrXgxjP0DkBFSfzqQsTHvWhHspBCxBs9UDtKQNzfq-S5RjLqGdbZkqvpWWObI_8sxawQHglxJVTHQBIheOoS9O1H1Tsk2U2ceGC4awXyYnh6E2hGeCTKAN79RYEnSzygUA_-aYj-wdjp0Qp3aMso4">
+<img id="detailImage2" class="w-full h-full object-cover" src="">
 </div>
 <div class="rounded-xl overflow-hidden relative">
-<img class="w-full h-full object-cover" data-alt="A group of young professionals collaborating on laptops in a stylish, open-concept co-working space within a cafe. The interior features industrial metal accents, glass partitions, and a modern aesthetic focused on productivity and social interaction." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARgKiUxPNXwgIpVhbG7mCfUrBZBD3ech4wQgtOMysfXcopoWFCiUYJpnuZ38rP_IM6Hmgqk8JLrNj-Fie8z6JimEiDBxgXE5Kn3O3VtLqAwle4fVQ-vulWs2NV613asTqL43p73vLiMZUCRv3tquTcP3iWtk7bkyWMjQ9ylHeGWZJjcb06F96LzlPc8pYDx7No35lzQsjXyS08ptBeLqpRnybVeErymlzkjMdSi2HywPLHCIY1WA2HYOsd7oWooKb6Wm4HOS-e0IA">
-<div class="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold">+18</div>
+<img id="detailImage3" class="w-full h-full object-cover" src="">
+<div class="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold">+5</div>
 </div>
 </div>
 </div>
 <!-- Action Button -->
-<button class="w-full bg-primary text-on-primary py-4 rounded-xl font-bold text-lg whisper-shadow flex items-center justify-center gap-2 active:scale-[0.98] transition-all mb-8">
+<button id="checkinBtn" onclick="performCheckin()" class="w-full bg-primary text-on-primary py-4 rounded-xl font-bold text-lg whisper-shadow flex items-center justify-center gap-2 active:scale-[0.98] transition-all mb-8">
 <span class="material-symbols-outlined">where_to_vote</span>
-                        Check-in to Venue
-                    </button>
+<span id="checkinBtnText">Check-in to Venue</span>
+</button>
 <!-- Leaderboard -->
 <div class="space-y-4">
 <div class="flex justify-between items-center">
-<h3 class="font-headline-md text-[20px]">Local Legends</h3>
-<span class="text-primary font-technical-label cursor-pointer">View All</span>
+<h3 class="font-headline-md text-[20px] text-on-surface dark:text-inverse-on-surface">Local Legends</h3>
 </div>
-<div class="space-y-2">
-<!-- Rank 1 -->
-<div class="flex items-center gap-4 p-3 rounded-xl bg-surface-container-low border border-soft-border">
-<div class="flex-shrink-0 w-8 h-8 flex items-center justify-center font-technical-label text-tertiary">#1</div>
-<div class="w-10 h-10 rounded-full bg-secondary overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="Portrait of a young male creative with a friendly expression, set against a blurred urban background. The lighting is soft and natural, emphasizing a high-definition, professional social media profile style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpi2DH_YkmLERc2GoG-WO4bj4bBFlacnxdeNCrJ0F3dy3FMMDH55VbtMcSWK4TVOW4cRUsH4E9cGwhtnVdhy_EEjtmtFuv6ofaQYiXqUHsfQldHl03KoMAn4NkOPzAq7mtpSzNIXpel-YHY22IS5HHBJpq0U4BZlboXxYgCtROqw6ROjn99B_DRhjGI21tw7YO8jW_PWYj2OpgVtju94GtceYuW2-M4_rfA2zGB2xtgSlbJf4Asx-BtvopjSbS2Ymmp64JJU7e-5I">
-</div>
-<div class="flex-1">
-<div class="font-bold text-on-surface">Marcus Chen</div>
-<div class="text-[12px] text-muted-zinc">84 Check-ins</div>
-</div>
-<div class="text-primary">
-<span class="material-symbols-outlined fill-1" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
-</div>
-</div>
-<!-- Rank 2 -->
-<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-surface-container-lowest transition-colors border border-transparent">
-<div class="flex-shrink-0 w-8 h-8 flex items-center justify-center font-technical-label text-muted-zinc">#2</div>
-<div class="w-10 h-10 rounded-full bg-tertiary overflow-hidden">
-<img class="w-full h-full object-cover" data-alt="Studio portrait of a vibrant young woman with a joyful smile. The background is a clean, neutral pastel, giving the image a modern and professional aesthetic suitable for a social application avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtQi7h6pAmy7h60uNoITWTpC7qvuGu9692ygT5_uhLHHueaMYzfzEgi2OO2GJTAtVV9M96Vnf5t_ynLXwrF-vifx_b2SDbhRNJ6XZbM1txip5ItGyw3UMp3r-OEsRE6S_dPCjci_Wt8Fj7hPx17DAYp9RTAX4Xve72Db-IKowVhlWT5TeSAaPoF_rqW61QZfG_noisFoQITtNV6QMcYVN1CTrnJOY8qbomj8oXk-HrClotbTUxIDh2C_uPHUqoqe8HS88orVNYYSU">
-</div>
-<div class="flex-1">
-<div class="font-bold text-on-surface">Sarah Bloom</div>
-<div class="text-[12px] text-muted-zinc">62 Check-ins</div>
-</div>
-</div>
+<div id="leaderboardList" class="space-y-2">
+    <!-- Dynamic leaderboard -->
 </div>
 </div>
 </div>
 </div>
 </div>
 </main>
-<!-- Bottom Navigation Bar (Mobile only) -->
-<footer class="md:hidden fixed bottom-0 w-full z-50 bg-surface/90 backdrop-blur-lg border-t border-soft-border shadow-[0_-4px_20px_rgba(0,0,0,0.05)] rounded-t-xl">
-<nav class="flex justify-around items-center h-20 px-4 pb-safe-area w-full">
-<div class="flex flex-col items-center justify-center text-muted-zinc px-3 py-1 hover:text-primary transition-all">
-<span class="material-symbols-outlined">dynamic_feed</span>
-<span class="text-technical-label font-technical-label">Feed</span>
-</div>
-<div class="flex flex-col items-center justify-center text-primary bg-primary-container/20 rounded-xl px-3 py-1 scale-95 transition-all duration-300 ease-out">
-<span class="material-symbols-outlined">explore</span>
-<span class="text-technical-label font-technical-label">Explore</span>
-</div>
-<div class="flex flex-col items-center justify-center -mt-8">
-  <button class="w-14 h-14 bg-[#6366F1] text-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform border-4 border-surface-pure">
-    <span class="material-symbols-outlined text-[32px]">add</span>
-  </button>
-  <span class="text-technical-label font-technical-label text-muted-zinc mt-1">Post</span>
-</div>
-<div class="flex flex-col items-center justify-center text-muted-zinc px-3 py-1 hover:text-primary transition-all">
-<span class="material-symbols-outlined">notifications</span>
-<span class="text-technical-label font-technical-label">Alerts</span>
-</div>
-<div class="flex flex-col items-center justify-center text-muted-zinc px-3 py-1 hover:text-primary transition-all">
-<span class="material-symbols-outlined">person</span>
-<span class="text-technical-label font-technical-label">Profile</span>
-</div>
-</nav>
-</footer>
 <!-- Overlay for sheet on desktop -->
 <div class="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300" id="overlay" onclick="toggleDetail()"></div>
 <script>
+        let selectedPlace = null;
+        let activeCategory = 'Cafe';
+
+        function selectCategory(category) {
+            activeCategory = category;
+            ['Cafe', 'Park', 'Mall', 'Culture'].forEach(cat => {
+                const chip = document.getElementById('chip-' + cat);
+                if (cat === category) {
+                    chip.className = "flex-shrink-0 bg-primary text-white px-5 py-2 rounded-full font-bold text-body-md whisper-shadow flex items-center gap-2";
+                } else {
+                    chip.className = "flex-shrink-0 glass-panel text-on-surface-variant dark:text-inverse-on-surface px-5 py-2 rounded-full font-medium text-body-md border border-soft-border dark:border-white/10 hover:bg-surface-variant/40 dark:hover:bg-white/10 transition-colors flex items-center gap-2";
+                }
+            });
+            
+            document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Searching...</p></div>';
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'loadPlaces',
+                category: category
+            }));
+        }
+
+        function handleSearchKeyPress(event) {
+            if (event.key === 'Enter') {
+                performSearch();
+            }
+        }
+
+        function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query.trim()) return;
+            
+            document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Searching...</p></div>';
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'searchPlaces',
+                query: query,
+                category: activeCategory
+            }));
+        }
+
+        function renderPlaces(places) {
+            const listDiv = document.getElementById('placesList');
+            if (!places || places.length === 0) {
+                listDiv.innerHTML = '<div class="text-center text-muted-zinc py-8">No venues found nearby.</div>';
+                return;
+            }
+
+            listDiv.innerHTML = places.map((place) => {
+                const img = place.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
+                const rating = place.rating || 4.5;
+                const desc = place.description || 'Venue';
+                const distText = place.distance ? place.distance.toFixed(1) + 'km away' : 'Nearby';
+                const placeStr = JSON.stringify(place).replace(/"/g, '&quot;');
+                
+                return '<div class="glass-panel border border-soft-border dark:border-white/10 rounded-xl p-4 whisper-shadow cursor-pointer group hover:-translate-y-px transition-all" onclick="selectPlace(' + placeStr + ')">' +
+                    '<div class="relative h-32 rounded-lg overflow-hidden mb-3">' +
+                        '<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="' + img + '">' +
+                        '<div class="absolute top-2 right-2 bg-primary/90 text-white text-[10px] px-2 py-1 rounded-full font-technical-label">' + rating + ' ★</div>' +
+                    '</div>' +
+                    '<h4 class="font-headline-md text-[18px] leading-tight mb-1 text-on-surface dark:text-inverse-on-surface">' + place.name + '</h4>' +
+                    '<p class="text-muted-zinc text-body-md mb-2 truncate">' + desc + '</p>' +
+                    '<div class="flex items-center justify-between">' +
+                        '<span class="text-primary font-technical-label text-[12px]">' + distText + '</span>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        function selectPlace(place) {
+            selectedPlace = place;
+            document.getElementById('detailName').innerText = place.name;
+            document.getElementById('detailRating').innerText = place.rating || '4.5';
+            document.getElementById('detailCategory').innerText = place.category || 'Venue';
+            document.getElementById('detailAddress').innerText = place.address || '';
+            
+            const imgUrl = place.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
+            document.getElementById('detailImage1').src = imgUrl;
+            document.getElementById('detailImage2').src = imgUrl;
+            document.getElementById('detailImage3').src = imgUrl;
+            
+            document.getElementById('leaderboardList').innerHTML = '<div class="text-center text-muted-zinc py-4"><span class="material-symbols-outlined animate-spin">progress_activity</span> Loading legends...</div>';
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'requestLeaderboard',
+                placeId: place.id
+            }));
+
+            const sheet = document.getElementById('detailSheet');
+            const overlay = document.getElementById('overlay');
+            sheet.classList.remove('translate-y-full');
+            sheet.classList.add('translate-y-0');
+            if (window.innerWidth >= 1024) {
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            }
+        }
+
+        function renderLeaderboard(leaderboard) {
+            const lbList = document.getElementById('leaderboardList');
+            if (!leaderboard || leaderboard.length === 0) {
+                lbList.innerHTML = '<div class="text-center text-muted-zinc py-4">Be the first to check in here!</div>';
+                return;
+            }
+
+            lbList.innerHTML = leaderboard.map((user, idx) => {
+                const isFirst = idx === 0;
+                const rankBadge = isFirst ? '<div class="text-primary"><span class="material-symbols-outlined fill-1" style="font-variation-settings: \'FILL\' 1;">workspace_premium</span></div>' : '';
+                const itemClass = isFirst ? 'bg-surface-container-low dark:bg-white/5 border border-soft-border dark:border-white/10' : 'hover:bg-surface-container-lowest dark:hover:bg-white/5 transition-colors';
+                const rankClass = isFirst ? 'text-tertiary' : 'text-muted-zinc';
+                const photo = user.photoURL || 'https://lh3.googleusercontent.com/aida-public/AB6AXuBpi2DH_YkmLERc2GoG-WO4bj4bBFlacnxdeNCrJ0F3dy3FMMDH55VbtMcSWK4TVOW4cRUsH4E9cGwhtnVdhy_EEjtmtFuv6ofaQYiXqUHsfQldHl03KoMAn4NkOPzAq7mtpSzNIXpel-YHY22IS5HHBJpq0U4BZlboXxYgCtROqw6ROjn99B_DRhjGI21tw7YO8jW_PWYj2OpgVtju94GtceYuW2-M4_rfA2zGB2xtgSlbJf4Asx-BtvopjSbS2Ymmp64JJU7e-5I';
+                
+                return '<div class="flex items-center gap-4 p-3 rounded-xl ' + itemClass + '">' +
+                    '<div class="flex-shrink-0 w-8 h-8 flex items-center justify-center font-technical-label ' + rankClass + '">#' + (idx + 1) + '</div>' +
+                    '<div class="w-10 h-10 rounded-full overflow-hidden bg-secondary">' +
+                        '<img class="w-full h-full object-cover" src="' + photo + '">' +
+                    '</div>' +
+                    '<div class="flex-1">' +
+                        '<div class="font-bold text-on-surface dark:text-inverse-on-surface">' + user.displayName + '</div>' +
+                        '<div class="text-[12px] text-muted-zinc">' + user.count + ' check-ins</div>' +
+                    '</div>' +
+                    rankBadge +
+                '</div>';
+            }).join('');
+        }
+
+        function performCheckin() {
+            if (!selectedPlace) return;
+            
+            const btn = document.getElementById('checkinBtn');
+            const txt = document.getElementById('checkinBtnText');
+            btn.disabled = true;
+            txt.innerText = 'Checking in...';
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'performCheckin',
+                placeId: selectedPlace.id,
+                placeName: selectedPlace.name,
+                latitude: selectedPlace.latitude,
+                longitude: selectedPlace.longitude,
+                category: selectedPlace.category
+            }));
+        }
+
+        function onCheckinSuccess() {
+            const btn = document.getElementById('checkinBtn');
+            const txt = document.getElementById('checkinBtnText');
+            btn.disabled = false;
+            txt.innerText = 'Check-in to Venue';
+        }
+
+        function onCheckinFailure() {
+            const btn = document.getElementById('checkinBtn');
+            const txt = document.getElementById('checkinBtnText');
+            btn.disabled = false;
+            txt.innerText = 'Check-in to Venue';
+        }
+
         function toggleDetail() {
             const sheet = document.getElementById('detailSheet');
             const overlay = document.getElementById('overlay');
             
-            if (sheet.classList.contains('translate-y-full')) {
-                sheet.classList.remove('translate-y-full');
-                sheet.classList.add('translate-y-0');
-                if (window.innerWidth >= 1024) {
-                    overlay.classList.remove('hidden');
-                    setTimeout(() => overlay.classList.add('opacity-100'), 10);
-                }
-            } else {
-                sheet.classList.add('translate-y-full');
-                sheet.classList.remove('translate-y-0');
-                overlay.classList.remove('opacity-100');
-                setTimeout(() => overlay.classList.add('hidden'), 300);
-            }
+            sheet.classList.add('translate-y-full');
+            sheet.classList.remove('translate-y-0');
+            overlay.classList.remove('opacity-100');
+            setTimeout(() => overlay.classList.add('hidden'), 300);
         }
 
-        // Initialize animations slightly staggered
         document.addEventListener('DOMContentLoaded', () => {
-            const items = document.querySelectorAll('.stagger-reveal');
-            items.forEach((item, index) => {
-                item.style.animationDelay = \`\${index * 0.1}s\`;
-            });
+            setTimeout(() => {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                    action: 'loadPlaces',
+                    category: 'Cafe'
+                }));
+            }, 300);
         });
-    </script>
-
-
+</script>
 </body></html>`;
+};
 
 export default function PlacesCheckin() {
+  const { user } = useAuth();
+  const { currentLocation } = useLocationStore();
+  const isDark = useThemeStore((state) => state.isDark);
+  const webViewRef = useRef(null);
+
+  // Sync Dark/Light Mode
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
-        source={{ html: htmlContent }} 
+        ref={webViewRef}
+        source={{ html: getHtmlContent(isDark) }} 
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onMessage={async (event) => {
+          try {
+            const message = event.nativeEvent.data;
+            const data = JSON.parse(message);
+            
+            const lat = currentLocation?.latitude || -6.324260;
+            const lng = currentLocation?.longitude || 106.791550;
+
+            if (data.action === 'loadPlaces') {
+              const results = await getNearbyPlaces(lat, lng, data.category);
+              webViewRef.current?.injectJavaScript(`renderPlaces(${JSON.stringify(results)}); true;`);
+            } 
+            else if (data.action === 'searchPlaces') {
+              const results = await getNearbyPlaces(lat, lng, data.category || 'Cafe');
+              const filtered = results.filter(p => p.name.toLowerCase().includes(data.query.toLowerCase()));
+              webViewRef.current?.injectJavaScript(`renderPlaces(${JSON.stringify(filtered)}); true;`);
+            }
+            else if (data.action === 'requestLeaderboard') {
+              const checkins = await getCheckinsForVenue(data.placeId);
+              const counts = {};
+              checkins.forEach(c => {
+                const uId = c.userId || 'anonymous';
+                if (!counts[uId]) {
+                  counts[uId] = {
+                    displayName: c.displayName || 'Explorer',
+                    photoURL: c.photoURL || '',
+                    count: 0
+                  };
+                }
+                counts[uId].count += 1;
+              });
+              const leaderboard = Object.values(counts).sort((a, b) => b.count - a.count);
+              webViewRef.current?.injectJavaScript(`renderLeaderboard(${JSON.stringify(leaderboard)}); true;`);
+            }
+            else if (data.action === 'performCheckin') {
+              if (!user) {
+                Alert.alert("Authentication Required", "Please log in to check in to venues.");
+                webViewRef.current?.injectJavaScript(`onCheckinFailure(); true;`);
+                return;
+              }
+              await createCheckin(user.uid, {
+                venueId: data.placeId,
+                venueName: data.placeName,
+                displayName: user.displayName || 'Explorer',
+                photoURL: user.photoURL || '',
+                latitude: data.latitude,
+                longitude: data.longitude,
+              });
+              
+              // Refresh leaderboard
+              const checkins = await getCheckinsForVenue(data.placeId);
+              const counts = {};
+              checkins.forEach(c => {
+                const uId = c.userId || 'anonymous';
+                if (!counts[uId]) {
+                  counts[uId] = {
+                    displayName: c.displayName || 'Explorer',
+                    photoURL: c.photoURL || '',
+                    count: 0
+                  };
+                }
+                counts[uId].count += 1;
+              });
+              const leaderboard = Object.values(counts).sort((a, b) => b.count - a.count);
+              
+              webViewRef.current?.injectJavaScript(`
+                onCheckinSuccess();
+                renderLeaderboard(${JSON.stringify(leaderboard)});
+                true;
+              `);
+            }
+          } catch (error) {
+            console.error("[PlacesCheckin] Error handling message:", error);
+            webViewRef.current?.injectJavaScript(`onCheckinFailure(); true;`);
+          }
+        }}
       />
     </SafeAreaView>
   );

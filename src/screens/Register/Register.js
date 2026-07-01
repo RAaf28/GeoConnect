@@ -1,7 +1,10 @@
-import React from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import { useThemeStore } from '../../store/stores';
+import { createAccount, signInWithGoogle } from '../../services/authService';
+import { createUserProfile } from '../../services/firestoreService';
 
 const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 <meta charset="utf-8">
@@ -173,7 +176,7 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 <h1 class="font-headline-lg text-headline-lg text-on-surface mb-2">Create Account</h1>
 <p class="text-on-surface-variant font-body-md">Join the global network of modern explorers and map your journey.</p>
 </div>
-<form class="space-y-5" onsubmit="event.preventDefault(); window.ReactNativeWebView.postMessage('performLogin');">
+<form class="space-y-5" onsubmit="event.preventDefault(); handleFormRegister();">
 <!-- Full Name -->
 <div class="space-y-1.5">
 <label class="font-technical-label text-technical-label text-on-surface-variant block uppercase tracking-wider" for="name">Full Name</label>
@@ -231,7 +234,7 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 </div>
 </div>
 <div class="grid gap-4 mb-8 grid-cols-1">
-<button class="w-full flex items-center justify-center gap-3 py-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors">
+<button class="w-full flex items-center justify-center gap-3 py-3 border border-outline-variant rounded-xl hover:bg-surface-container-low transition-colors" type="button" onclick="window.ReactNativeWebView.postMessage('performGoogleLogin')">
 <img alt="Google" class="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg">
 <span class="font-body-md font-medium">Continue with Google</span>
 </button>
@@ -285,27 +288,89 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 
         passwordInput.addEventListener('input', validatePasswords);
         confirmInput.addEventListener('input', validatePasswords);
+
+        function handleFormRegister() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const terms = document.getElementById('terms').checked;
+            
+            if (!terms) {
+                alert("You must agree to the Terms of Service and Privacy Policy.");
+                return;
+            }
+            if (password !== confirmPassword) {
+                alert("Passwords do not match.");
+                return;
+            }
+            
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'performRegister',
+                name: name,
+                email: email,
+                password: password
+            }));
+        }
     </script>
 
 
 </body></html>`;
 
 export default function Register({ navigation }) {
+  const webViewRef = useRef(null);
+  const isDark = useThemeStore((state) => state.isDark);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
+        ref={webViewRef}
         source={{ html: htmlContent }} 
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         // Add basic message handling for potential future navigation
-        onMessage={(event) => {
-          const action = event.nativeEvent.data;
-          if (action === 'goBack') navigation.goBack();
-          else if (action === 'navigateRegister') navigation.navigate('Register');
-          else if (action === 'navigateLogin') navigation.navigate('Login');
-          else if (action === 'navigateForgot') navigation.navigate('ForgotPassword');
+        onMessage={async (event) => {
+          const message = event.nativeEvent.data;
+          if (message === 'goBack') navigation.goBack();
+          else if (message === 'navigateRegister') navigation.navigate('Register');
+          else if (message === 'navigateLogin') navigation.navigate('Login');
+          else if (message === 'navigateForgot') navigation.navigate('ForgotPassword');
+          else if (message === 'performGoogleLogin') {
+            try {
+              await signInWithGoogle();
+            } catch (error) {
+              Alert.alert("Google Login Error", error.message);
+            }
+          } else {
+            try {
+              const data = JSON.parse(message);
+              if (data.action === 'performRegister') {
+                const authUser = await createAccount(data.email, data.password, data.name);
+                await createUserProfile(authUser.uid, {
+                  displayName: data.name,
+                  email: data.email,
+                  photoURL: '',
+                  bio: '',
+                });
+                Alert.alert("Success", "Account created successfully!");
+              }
+            } catch (error) {
+              if (error instanceof SyntaxError) {
+                // Ignore standard string actions
+              } else {
+                Alert.alert("Registration Error", error.message);
+              }
+            }
+          }
         }}
       />
     </SafeAreaView>

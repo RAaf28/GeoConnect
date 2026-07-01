@@ -1,8 +1,9 @@
-import React from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { useAuthStore } from '../../store/stores';
+import { useAuthStore, useThemeStore } from '../../store/stores';
+import { signInWithEmail, signInWithGoogle } from '../../services/authService';
 
 const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 <meta charset="utf-8">
@@ -156,7 +157,7 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 <p class="font-body-md text-body-md text-on-surface-variant">Log in to explore your neighborhood and connect with local adventurers.</p>
 </div>
 <!-- Login Form -->
-<form class="space-y-6" id="loginForm" onsubmit="event.preventDefault(); window.ReactNativeWebView.postMessage('performLogin');">
+<form class="space-y-6" id="loginForm" onsubmit="event.preventDefault(); handleFormLogin();">
 <!-- Email Input -->
 <div class="space-y-2">
 <label class="font-technical-label text-technical-label text-outline uppercase tracking-wider" for="email">Email Address</label>
@@ -198,7 +199,7 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
 </div>
 <!-- Social Buttons -->
 <div class="grid gap-4">
-<button class="flex items-center justify-center gap-2 h-12 rounded-xl border border-outline-variant font-body-md text-body-md text-on-surface hover:bg-surface-container-high transition-colors"><img alt="Google" class="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg">Google</button>
+<button class="flex items-center justify-center gap-2 h-12 rounded-xl border border-outline-variant font-body-md text-body-md text-on-surface hover:bg-surface-container-high transition-colors" type="button" onclick="window.ReactNativeWebView.postMessage('performGoogleLogin')"><img alt="Google" class="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg">Google</button>
 
 </div>
 </div>
@@ -245,29 +246,67 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
                 mainBtn.style.transform = 'scale(1)';
             });
         });
+
+        function handleFormLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'performLogin',
+                email: email,
+                password: password
+            }));
+        }
     </script>
 
 
 </body></html>`;
 
 export default function Login({ navigation }) {
+  const webViewRef = useRef(null);
+  const isDark = useThemeStore((state) => state.isDark);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
   return (
     <SafeAreaView style={styles.container}>
-      <WebView 
-        source={{ html: htmlContent }} 
+      <WebView
+        ref={webViewRef}
+        source={{ html: htmlContent }}
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         // Add basic message handling for potential future navigation
-        onMessage={(event) => {
-          const action = event.nativeEvent.data;
-          if (action === 'goBack') navigation.goBack();
-          else if (action === 'navigateRegister') navigation.navigate('Register');
-          else if (action === 'navigateLogin') navigation.navigate('Login');
-          else if (action === 'navigateForgot') navigation.navigate('ForgotPassword');
-          else if (action === 'performLogin') {
-            useAuthStore.getState().setUser({ uid: 'mock-user-123', email: 'test@example.com' });
+        onMessage={async (event) => {
+          const message = event.nativeEvent.data;
+          if (message === 'goBack') navigation.goBack();
+          else if (message === 'navigateRegister') navigation.navigate('Register');
+          else if (message === 'navigateLogin') navigation.navigate('Login');
+          else if (message === 'navigateForgot') navigation.navigate('ForgotPassword');
+          else if (message === 'performGoogleLogin') {
+            try {
+              await signInWithGoogle();
+            } catch (error) {
+              Alert.alert("Google Login Error", error.message);
+            }
+          } else {
+            try {
+              const data = JSON.parse(message);
+              if (data.action === 'performLogin') {
+                await signInWithEmail(data.email, data.password);
+              }
+            } catch (error) {
+              if (error instanceof SyntaxError) {
+                // Ignore standard string actions
+              } else {
+                Alert.alert("Login Error", error.message);
+              }
+            }
           }
         }}
       />

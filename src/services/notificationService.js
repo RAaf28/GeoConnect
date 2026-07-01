@@ -1,239 +1,192 @@
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
-import Constants from "expo-constants";
-import { Platform } from "react-native";
-import { doc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  limit as firestoreLimit,
+  serverTimestamp,
+} from "firebase/firestore";
 import { firestore } from "./firebase";
 
-// ============================================================
-// GeoConnect — Push Notification Service (FCM via Expo)
-// ============================================================
-// Expo Notifications handles FCM (Android) and APNs (iOS)
-// secara transparan — satu API untuk kedua platform.
-// ============================================================
+/**
+ * Notification types:
+ * - "follow"     → Someone followed you
+ * - "like"       → Someone liked your post
+ * - "comment"    → Someone commented on your post
+ * - "event"      → New event near you
+ * - "checkin"    → Friend checked in nearby
+ * - "rsvp"       → Someone RSVP'd to your event
+ */
 
 /**
- * Konfigurasi default behavior notifikasi saat app di foreground.
- * Tanpa ini, notifikasi tidak akan tampil saat app terbuka.
+ * Create a notification for a user.
+ * @param {string} userId - The user receiving the notification
+ * @param {string} type - Notification type (follow/like/comment/event/checkin/rsvp)
+ * @param {Object} data - Additional data for the notification
+ *   - { fromUserId, fromUserName, fromUserPhoto, postId, eventId, message }
+ * @returns {string} Notification document ID
  */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
-
-/**
- * Register untuk push notification dan dapatkan Expo Push Token.
- * Token ini digunakan untuk mengirim notifikasi ke device spesifik.
- *
- * @returns {string|null} Expo Push Token atau null jika gagal
- */
-export const registerForPushNotifications = async () => {
-  // Push notifications hanya bekerja di physical device
-  if (!Device.isDevice) {
-    console.warn(
-      "[Notifications] Push notifications hanya bekerja di physical device",
-    );
-    return null;
-  }
-
+export const createNotification = async (userId, type, data = {}) => {
   try {
-    // 1. Cek permission yang sudah ada
-    const { status: existingStatus } =
-      await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    // 2. Minta permission jika belum granted
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== "granted") {
-      console.warn("[Notifications] Permission ditolak oleh user");
-      return null;
-    }
-
-    // 3. Dapatkan Expo Push Token
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId,
+    const docRef = await addDoc(collection(firestore, "notifications"), {
+      userId,
+      type,
+      ...data,
+      read: false,
+      createdAt: serverTimestamp(),
     });
-
-    const token = tokenData.data;
-    console.log("[Notifications] Push token:", token);
-
-    // 4. Setup Android notification channel
-    if (Platform.OS === "android") {
-      await setupAndroidChannels();
-    }
-
-    return token;
+    return docRef.id;
   } catch (error) {
-    console.error("[Notifications] Registration error:", error);
-    return null;
+    console.error("[Notifications] Error creating notification:", error);
+    throw error;
   }
 };
 
 /**
- * Setup Android notification channels.
- * Android 8+ (Oreo) membutuhkan channels untuk kategorisasi notifikasi.
- */
-const setupAndroidChannels = async () => {
-  // Channel utama: social interactions
-  await Notifications.setNotificationChannelAsync("social", {
-    name: "Social",
-    description: "Follow, like, dan comment notifications",
-    importance: Notifications.AndroidImportance.DEFAULT,
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: "#4648D4",
-    sound: "default",
-  });
-
-  // Channel: nearby events
-  await Notifications.setNotificationChannelAsync("events", {
-    name: "Nearby Events",
-    description: "Event baru di sekitar kamu",
-    importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: "#4648D4",
-    sound: "default",
-  });
-
-  // Channel: location updates (low priority)
-  await Notifications.setNotificationChannelAsync("location", {
-    name: "Location Updates",
-    description: "Background location tracking status",
-    importance: Notifications.AndroidImportance.LOW,
-    sound: null,
-  });
-};
-
-/**
- * Simpan push token ke Firestore user profile.
- * Dipanggil setelah login berhasil.
- *
+ * Get notifications for a user, ordered by most recent.
  * @param {string} userId
- * @param {string} token - Expo Push Token
+ * @param {number} maxResults
+ * @returns {Array} List of notification objects
  */
-export const savePushToken = async (userId, token) => {
+export const getNotifications = async (userId, maxResults = 50) => {
   try {
-    await updateDoc(doc(firestore, "users", userId), {
-      expoPushToken: token,
-      tokenUpdatedAt: new Date(),
-    });
-    console.log("[Notifications] Token saved to Firestore");
+    const q = query(
+      collection(firestore, "notifications"),
+      where("userId", "==", userId),
+      orderBy("createdAt", "desc"),
+      firestoreLimit(maxResults),
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
   } catch (error) {
-    console.error("[Notifications] Save token error:", error);
+    console.error("[Notifications] Error fetching notifications:", error);
+    throw error;
   }
 };
 
 /**
- * Kirim local notification (tanpa server).
- * Berguna untuk notifikasi dari background task.
- *
- * @param {object} options
- * @param {string} options.title
- * @param {string} options.body
- * @param {object} options.data - Custom data payload
- * @param {string} options.channelId - Android channel ID
- * @returns {string} notification identifier
+ * Get unread notification count for a user.
+ * @param {string} userId
+ * @returns {number} Count of unread notifications
  */
-export const sendLocalNotification = async ({
-  title,
-  body,
-  data = {},
-  channelId = "social",
-}) => {
+export const getUnreadCount = async (userId) => {
   try {
-    const id = await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data,
-        sound: "default",
-        ...(Platform.OS === "android" && { channelId }),
-      },
-      trigger: null, // Langsung kirim (no delay)
-    });
-    return id;
+    const q = query(
+      collection(firestore, "notifications"),
+      where("userId", "==", userId),
+      where("read", "==", false),
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.size;
   } catch (error) {
-    console.error("[Notifications] Local notification error:", error);
-    return null;
+    console.error("[Notifications] Error getting unread count:", error);
+    throw error;
   }
 };
 
 /**
- * Kirim notifikasi "Ada event baru di sekitar kamu"
- * Dipanggil dari background location task saat detect event baru nearby.
- *
- * @param {string} eventTitle - Judul event
- * @param {string} distance - Jarak formatted (e.g. "500m")
+ * Mark a single notification as read.
+ * @param {string} notificationId
  */
-export const notifyNearbyEvent = async (eventTitle, distance) => {
-  return sendLocalNotification({
-    title: "🎉 Event Baru di Sekitarmu!",
-    body: `${eventTitle} — ${distance} dari lokasimu`,
-    data: { type: "nearby_event", eventTitle },
-    channelId: "events",
+export const markAsRead = async (notificationId) => {
+  try {
+    await updateDoc(doc(firestore, "notifications", notificationId), {
+      read: true,
+    });
+  } catch (error) {
+    console.error("[Notifications] Error marking as read:", error);
+    throw error;
+  }
+};
+
+/**
+ * Mark all notifications as read for a user.
+ * @param {string} userId
+ */
+export const markAllAsRead = async (userId) => {
+  try {
+    const q = query(
+      collection(firestore, "notifications"),
+      where("userId", "==", userId),
+      where("read", "==", false),
+    );
+    const querySnapshot = await getDocs(q);
+    const updatePromises = querySnapshot.docs.map((doc) =>
+      updateDoc(doc.ref, { read: true }),
+    );
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error("[Notifications] Error marking all as read:", error);
+    throw error;
+  }
+};
+
+/**
+ * Helper: Create a follow notification.
+ * @param {string} targetUserId - User being followed
+ * @param {Object} fromUser - { uid, displayName, photoURL }
+ */
+export const notifyFollow = async (targetUserId, fromUser) => {
+  return createNotification(targetUserId, "follow", {
+    fromUserId: fromUser.uid,
+    fromUserName: fromUser.displayName || "Someone",
+    fromUserPhoto: fromUser.photoURL || "",
+    message: `${fromUser.displayName || "Someone"} started following you`,
   });
 };
 
 /**
- * Kirim notifikasi social interaction
- * @param {"follow"|"like"|"comment"} type
- * @param {string} fromUserName - nama user yang trigger
- * @param {string} context - konteks tambahan (e.g. nama post)
+ * Helper: Create a like notification.
+ * @param {string} postAuthorId - Owner of the liked post
+ * @param {Object} fromUser - { uid, displayName, photoURL }
+ * @param {string} postId
  */
-export const notifySocialInteraction = async (type, fromUserName, context = "") => {
-  const messages = {
-    follow: {
-      title: "👤 Follower Baru",
-      body: `${fromUserName} mulai mengikuti kamu`,
-    },
-    like: {
-      title: "❤️ Like Baru",
-      body: `${fromUserName} menyukai postinganmu${context ? `: "${context}"` : ""}`,
-    },
-    comment: {
-      title: "💬 Komentar Baru",
-      body: `${fromUserName} mengomentari postinganmu${context ? `: "${context}"` : ""}`,
-    },
-  };
-
-  const msg = messages[type] || { title: "GeoConnect", body: "Ada notifikasi baru" };
-
-  return sendLocalNotification({
-    title: msg.title,
-    body: msg.body,
-    data: { type, fromUserName },
-    channelId: "social",
+export const notifyLike = async (postAuthorId, fromUser, postId) => {
+  return createNotification(postAuthorId, "like", {
+    fromUserId: fromUser.uid,
+    fromUserName: fromUser.displayName || "Someone",
+    fromUserPhoto: fromUser.photoURL || "",
+    postId,
+    message: `${fromUser.displayName || "Someone"} liked your post`,
   });
 };
 
 /**
- * Hapus semua notifikasi yang sudah ditampilkan
+ * Helper: Create a comment notification.
+ * @param {string} postAuthorId - Owner of the commented post
+ * @param {Object} fromUser - { uid, displayName, photoURL }
+ * @param {string} postId
+ * @param {string} commentText
  */
-export const clearAllNotifications = async () => {
-  await Notifications.dismissAllNotificationsAsync();
+export const notifyComment = async (
+  postAuthorId,
+  fromUser,
+  postId,
+  commentText,
+) => {
+  return createNotification(postAuthorId, "comment", {
+    fromUserId: fromUser.uid,
+    fromUserName: fromUser.displayName || "Someone",
+    fromUserPhoto: fromUser.photoURL || "",
+    postId,
+    message: `${fromUser.displayName || "Someone"} commented: "${commentText.substring(0, 50)}"`,
+  });
 };
 
 /**
- * Dapatkan badge count
- * @returns {number}
+ * Helper: Create a nearby event notification.
+ * @param {string} userId - User to notify
+ * @param {string} eventId
+ * @param {string} eventTitle
  */
-export const getBadgeCount = async () => {
-  return await Notifications.getBadgeCountAsync();
-};
-
-/**
- * Set badge count
- * @param {number} count
- */
-export const setBadgeCount = async (count) => {
-  await Notifications.setBadgeCountAsync(count);
+export const notifyNearbyEvent = async (userId, eventId, eventTitle) => {
+  return createNotification(userId, "event", {
+    eventId,
+    message: `New event near you: ${eventTitle}`,
+  });
 };

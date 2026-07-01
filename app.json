@@ -6,12 +6,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTabletMode": true,
-      "bundleIdentifier": "com.geoconnect.app",
-      "infoPlist": {
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"],
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "GeoConnect membutuhkan akses lokasi untuk menemukan orang dan event di sekitarmu.",
-        "NSLocationWhenInUseUsageDescription": "GeoConnect membutuhkan akses lokasi untuk menampilkan peta dan fitur nearby."
-      }
+      "bundleIdentifier": "com.geoconnect.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,13 +21,8 @@
         "INTERNET",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "WAKE_LOCK"
-      ],
-      "googleServicesFile": "./google-services.json",
-      "useNextNotificationsApi": true
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -41,19 +31,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow GeoConnect to access your location to discover nearby people and events.",
-          "locationAlwaysPermission": "Allow GeoConnect to access your location in the background for continuous nearby discovery.",
-          "isAndroidBackgroundLocationEnabled": true,
-          "isAndroidForegroundServiceEnabled": true
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#4648D4",
-          "defaultChannel": "social",
-          "sounds": []
+          "locationAlwaysAndWhenInUsePermission": "Allow GeoConnect to access your location."
         }
       ]
     ]

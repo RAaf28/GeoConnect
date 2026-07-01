@@ -1,16 +1,18 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import { WebView } from 'react-native-webview';
+import { useAuth } from '../../hooks/useAuth';
+import { useThemeStore, useFeedStore } from '../../store/stores';
+import { getAllPosts, getUserProfile, likePost, unlikePost, hasLikedPost } from '../../services/firestoreService';
 
-const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
+const getHtmlContent = (isDark) => {
+  return `<!DOCTYPE html><html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
 <title>GeoConnect | Feed</title>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <script id="tailwind-config">
       tailwind.config = {
@@ -104,6 +106,7 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
     </script>
 <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+        .dark body { background-color: #1b1b23; color: #f2effb; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .glass-panel { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
         .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
@@ -120,213 +123,255 @@ const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
         }
     </style>
 </head>
-<body class="bg-background text-on-surface">
+<body class="bg-background dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface">
 <!-- Top Navigation Bar -->
-<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-surface-container/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
 <div class="flex items-center gap-2">
 <span class="material-symbols-outlined text-primary text-[28px]">explore</span>
 <span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
 </div>
 <div class="flex items-center gap-4">
-<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 transition-colors">
-<span class="material-symbols-outlined text-on-surface-variant">search</span>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant dark:text-inverse-on-surface">search</span>
 </button>
-<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant">
-<img alt="User" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7O_AiaTmqUI-8RtP8H_aDP_Y9H19LrkRwbP7fAOtrtHyWA3A2V4jfZy1vRPMqwdTIdeshS9QqmZo-OHapLmohk4JrvRsASxBrHmNibWZwd2i0OQwT6ZnsS6yiVrzmBHhJEsZ8HM2ZJyoD_RU5MW7fam0nZ6VC9WOlzPeSQrOPLXNftsG8l5XkOAhpapyoHH62t7d78LLKcjXuMbieojsM5d6zOZLW7vp3jtelrp3JyHE9gHYnr2yWq2ZRCkE4c1rA8faytyw3Ti4">
-</div>
 </div>
 </header>
 <!-- Main Content Area -->
 <main class="pt-20 pb-4 max-w-2xl mx-auto px-4 lg:px-0">
 <!-- Filter Bar -->
-<div class="sticky top-16 z-40 py-4 bg-background/95 backdrop-blur-sm mb-2">
+<div class="sticky top-16 z-40 py-4 bg-background/95 dark:bg-inverse-surface/95 backdrop-blur-sm mb-2">
 <div class="flex items-center justify-between">
-<div class="flex gap-2 p-1 bg-surface-container-low rounded-full">
+<div class="flex gap-2 p-1 bg-surface-container-low dark:bg-white/5 rounded-full">
 <button class="px-6 py-2 rounded-full text-technical-label font-technical-label bg-primary text-on-primary shadow-sm transition-all">Feed</button>
-<button class="px-6 py-2 rounded-full text-technical-label font-technical-label text-on-surface-variant hover:bg-surface-variant/50 transition-all">Trending</button>
-</div>
-<label class="relative inline-flex items-center cursor-pointer group">
-<input class="sr-only peer" type="checkbox" value="">
-<span class="mr-3 text-technical-label font-technical-label text-on-surface-variant">Nearby Only</span>
-<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[21px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-</label>
-</div>
-</div>
-<!-- Post List (Infinite Scroll Logic simulated by multiple cards) -->
-<div class="space-y-6">
-<!-- Post Card 1 -->
-<article class="post-card-stagger bg-surface-pure rounded-xl overflow-hidden whisper-shadow border border-soft-border group transition-all hover:-translate-y-px duration-300 opacity-100" style="animation-delay: 0.1s;">
-<!-- Card Header -->
-<div class="p-4 flex items-center justify-between">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-full border-2 border-primary/20 p-0.5">
-<img alt="Sasha" class="w-full h-full rounded-full object-cover" data-alt="A portrait-style profile avatar of a young, creative professional woman with a warm expression and short hair, rendered in a crisp, modern minimalist digital illustration style with soft, professional lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYL4wmwp3XgWvOehw59YSIe1r17D5Krjv8SpNsiIKJbWMUu8I7CzeD4-HUm5d6bibS2oGOQuZjEysl2qtGtUpx_jYSTu23JGxVO7HO_sYi6FL6jxeE8EO1ikKTg4-PhmQfaQXlMRFy8vCh8C7onysdga17jyIQzIaxm0XLjAwYNyxEQ6UGKOYxPzKCRO8KYC9Q6kgJR8iRrVcP6n1viCB7tiK17lphzhvMOpfTVEIpRsRfrpx1nKC5Qs20l_Z85dS--HVazMd_HTE">
-</div>
-<div>
-<h3 class="font-headline-md text-[15px] leading-tight text-on-surface">Sasha K.</h3>
-<div class="flex items-center gap-1.5 mt-0.5">
-<span class="material-symbols-outlined text-[14px] text-primary">location_on</span>
-<button class="text-technical-label font-technical-label text-primary hover:underline">Zion National Park, UT</button>
-<span class="text-[10px] text-muted-zinc">•</span>
-<time class="text-technical-label font-technical-label text-muted-zinc">2h ago</time>
+<button class="px-6 py-2 rounded-full text-technical-label font-technical-label text-on-surface-variant dark:text-inverse-on-surface hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-all">Trending</button>
 </div>
 </div>
 </div>
-<button class="text-muted-zinc hover:text-on-surface transition-colors">
-<span class="material-symbols-outlined">more_vert</span>
-</button>
-</div>
-<!-- Card Content -->
-<div class="aspect-[4/5] overflow-hidden relative">
-<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A breathtaking wide-angle landscape photograph of Zion National Park at sunrise, capturing the majestic orange sandstone cliffs and deep green valleys. The lighting is ethereal with golden morning rays filtering through a slight mist, creating a serene and adventurous atmosphere. The visual style is premium and high-definition, consistent with a modern discovery aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgK3GmUCEjvHxKKR_Q6uae-02LEnsS9hcZzO9ofenTqdId5tKoJqD4zDr0zJZp8L5g6mVSzvL3ukJYj0H2Tc5wqh8vnilrY7ewndj-9jmiUx07l_Tn83PeVjnNlAOH2YiH_vg9_vdRvcRLjoZfXF2ejO6yZ22vIjuS2nzoNg9263hfuiAvJH0BysD7qm2JaWPBrzTXtwVHZ2-mqnX7iBRbPq7i6EDbpZRmIG1YWnBlxuKZjWtH6gFNOzib6aUjMYRtcsl-4EFR_8Q">
-<div class="absolute top-4 right-4 bg-surface-pure/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/30">
-<div class="flex items-center gap-2">
-<div class="w-2 h-2 rounded-full bg-primary nearby-pulse"></div>
-<span class="text-technical-label font-technical-label text-white drop-shadow-md">Nearby Activity</span>
-</div>
-</div>
-</div>
-<!-- Card Footer Actions -->
-<div class="p-4">
-<div class="flex items-center justify-between mb-4">
-<div class="flex items-center gap-5">
-<button class="flex items-center gap-1.5 text-on-surface group/action">
-<span class="material-symbols-outlined text-[24px] group-hover/action:text-error transition-colors">favorite</span>
-<span class="text-technical-label font-technical-label">1.2k</span>
-</button>
-<button class="flex items-center gap-1.5 text-on-surface group/action">
-<span class="material-symbols-outlined text-[24px] group-hover/action:text-primary transition-colors">chat_bubble</span>
-<span class="text-technical-label font-technical-label">42</span>
-</button>
-<button class="flex items-center gap-1.5 text-on-surface group/action">
-<span class="material-symbols-outlined text-[24px] group-hover/action:text-primary transition-colors">send</span>
-</button>
-</div>
-<button class="text-on-surface hover:text-primary transition-colors">
-<span class="material-symbols-outlined text-[24px]">bookmark</span>
-</button>
-</div>
-<div class="space-y-1">
-<p class="text-body-md font-body-md text-on-surface">
-<span class="font-bold">Sasha K.</span> Finally made it to the Narrows. The water was freezing but the view was absolutely spiritual. Highly recommend the 5AM start to beat the crowds! 🏔️✨
-                        </p>
-<button class="text-technical-label font-technical-label text-muted-zinc hover:text-primary transition-colors">View all 42 comments</button>
-</div>
-</div>
-</article>
-<!-- Post Card 2 -->
-<article class="post-card-stagger bg-surface-pure rounded-xl overflow-hidden whisper-shadow border border-soft-border group transition-all hover:-translate-y-px duration-300 opacity-100" style="animation-delay: 0.2s;">
-<div class="p-4 flex items-center justify-between">
-<div class="flex items-center gap-3">
-<div class="w-10 h-10 rounded-full border-2 border-primary/20 p-0.5">
-<img alt="Marco" class="w-full h-full rounded-full object-cover" data-alt="A profile picture of a young male explorer with a friendly smile, outdoor gear, and a vibrant forest background. The art style is modern, clean, and minimalist, utilizing soft focus and professional high-key lighting for a premium discovery app aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTEKFMh2ZYFyJm8qgeDvN1qbDIqEG4exSxbhC3LIOaH7gsoI5QiXO9XbNxNscD92_ek11aCTwcf0Kq5TyLITguyzeezBCgauc1BBlDP8lk8G1c9oxzNP63jAb81Iv4EZHM522DZQHF_jc5hENk1aE2Q7LfbU1m-UQZboBHXnsFrx0GKvkysKn1HT3fI_A-vOHhJUmrPPFGoU3C7W3tKzCgItsT5k0qThV0BEkNB323pB-M133Bf7h2hHs5LO7qMcpTTC9jhVOjBlQ">
-</div>
-<div>
-<h3 class="font-headline-md text-[15px] leading-tight text-on-surface">Marco Polo</h3>
-<div class="flex items-center gap-1.5 mt-0.5">
-<span class="material-symbols-outlined text-[14px] text-primary">location_on</span>
-<button class="text-technical-label font-technical-label text-primary hover:underline">Old Town, Prague</button>
-<span class="text-[10px] text-muted-zinc">•</span>
-<time class="text-technical-label font-technical-label text-muted-zinc">5h ago</time>
-</div>
-</div>
-</div>
-<button class="text-muted-zinc hover:text-on-surface transition-colors">
-<span class="material-symbols-outlined">more_vert</span>
-</button>
-</div>
-<div class="aspect-[16/9] overflow-hidden">
-<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A cinematic night-time view of Prague's Old Town Square, featuring the illuminated Týn Church and historical clock tower. The cobblestone streets reflect the warm amber glow of city lanterns, creating a magical, historical atmosphere. The photograph captures rich textures and deep shadows, emphasizing a premium travel experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6NzgYqUCo_Fa5hL6tsuxs9hQZyZp67g3oN4klQpR-blKNr0WbG_YCGsMoXJMTZQ3hxhAItzVmSnt815xuzNWkYZMMn1SahiI-BwC9qMzsD7IK8SciftdjttcxCogZPQ-IQqgizQ9tz6IpvMfgu0faTq6WF8xYQ-C8ge6oUYC26wfD6MGVYQ9Nv9s7JluwvFE9BQMC_HT5MrMX4naKUukZ-Wwbr0TIL9XOsLJtMXeaYWEyz_7r8dX51DGqBv9wHuEthsr6ikqWKLk">
-</div>
-<div class="p-4">
-<div class="flex items-center justify-between mb-4">
-<div class="flex items-center gap-5">
-<button class="flex items-center gap-1.5 text-on-surface group/action">
-<span class="material-symbols-outlined text-[24px] group-hover/action:text-error transition-colors">favorite</span>
-<span class="text-technical-label font-technical-label">842</span>
-</button>
-<button class="flex items-center gap-1.5 text-on-surface group/action">
-<span class="material-symbols-outlined text-[24px] group-hover/action:text-primary transition-colors">chat_bubble</span>
-<span class="text-technical-label font-technical-label">12</span>
-</button>
-<button class="flex items-center gap-1.5 text-on-surface group/action">
-<span class="material-symbols-outlined text-[24px] group-hover/action:text-primary transition-colors">send</span>
-</button>
-</div>
-<button class="text-on-surface hover:text-primary transition-colors">
-<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">bookmark</span>
-</button>
-</div>
-<div class="space-y-1">
-<p class="text-body-md font-body-md text-on-surface">
-<span class="font-bold">Marco Polo</span> Prague hits different at midnight. The silence of the history here is deafening in the best way possible. 🇨🇿
-                        </p>
-</div>
-</div>
-</article>
-<!-- Loading Spinner (End of Scroll) -->
-<div class="flex flex-col items-center py-8 gap-3">
-<div class="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-<p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest">Discovering more...</p>
-</div>
+<!-- Post List -->
+<div id="feedContainer" class="space-y-6">
+    <div class="flex flex-col items-center py-16 gap-3">
+        <span class="material-symbols-outlined text-primary animate-spin text-3xl">progress_activity</span>
+        <p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest">Loading feed...</p>
+    </div>
 </div>
 </main>
-<!-- Bottom Navigation Bar -->
-
-<!-- Float Action Button (Optional contextual context) -->
 
 <script>
-        // Micro-interaction: Like Heart Animation
-        document.querySelectorAll('.group\\\\/action button:first-child').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const icon = this.querySelector('.material-symbols-outlined');
-                if (icon.style.fontVariationSettings.includes("'FILL' 1")) {
-                    icon.style.fontVariationSettings = "'FILL' 0";
-                    icon.classList.remove('text-error');
-                } else {
-                    icon.style.fontVariationSettings = "'FILL' 1";
-                    icon.classList.add('text-error');
-                    // Add small pop effect
-                    this.style.transform = 'scale(1.3)';
-                    setTimeout(() => {
-                        this.style.transform = 'scale(1)';
-                    }, 150);
-                }
-            });
-        });
+        function formatTimeAgo(dateStr) {
+            if (!dateStr) return 'now';
+            const date = dateStr.seconds ? new Date(dateStr.seconds * 1000) : new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMin = Math.floor(diffMs / 60000);
+            if (diffMin < 1) return 'now';
+            if (diffMin < 60) return diffMin + 'm ago';
+            const diffH = Math.floor(diffMin / 60);
+            if (diffH < 24) return diffH + 'h ago';
+            const diffD = Math.floor(diffH / 24);
+            return diffD + 'd ago';
+        }
 
-        // Simple scroll observer for infinite scroll simulation
-        const observerOptions = {
-            root: null,
-            threshold: 0.1
-        };
+        function renderPosts(posts) {
+            const container = document.getElementById('feedContainer');
+            if (!posts || posts.length === 0) {
+                container.innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-muted-zinc text-4xl">dynamic_feed</span><p class="text-on-surface-variant dark:text-inverse-on-surface font-bold text-lg">No posts yet</p><p class="text-muted-zinc text-sm">Be the first to share something!</p></div>';
+                return;
+            }
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('opacity-100');
-                    entry.target.classList.remove('opacity-0', 'translate-y-4');
-                }
-            });
-        }, observerOptions);
+            container.innerHTML = posts.map((post, idx) => {
+                const authorName = post.authorName || 'Explorer';
+                const authorPhoto = post.authorPhoto || '';
+                const locationLabel = post.locationLabel || '';
+                const timeAgo = formatTimeAgo(post.createdAt);
+                const likeCount = post.likesCount || 0;
+                const commentCount = post.commentsCount || 0;
+                const isLiked = post.isLiked || false;
+                const heartFill = isLiked ? "font-variation-settings: \\'FILL\\' 1;" : "";
+                const heartColor = isLiked ? "text-error" : "";
+                const imgTag = post.imageURL ? '<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src="' + post.imageURL + '">' : '';
+                const imgSection = post.imageURL ? '<div class="aspect-[4/5] overflow-hidden relative cursor-pointer" onclick="openPost(\\'' + post.id + '\\')">' + imgTag + '</div>' : '';
+                const avatarImg = authorPhoto ? '<img alt="' + authorName + '" class="w-full h-full rounded-full object-cover" src="' + authorPhoto + '">' : '<div class="w-full h-full rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">' + (authorName.charAt(0) || 'E') + '</div>';
+                const locationHtml = locationLabel ? '<span class="material-symbols-outlined text-[14px] text-primary">location_on</span><span class="text-technical-label font-technical-label text-primary">' + locationLabel + '</span><span class="text-[10px] text-muted-zinc">•</span>' : '';
 
-        document.querySelectorAll('.post-card-stagger').forEach(card => {
-            observer.observe(card);
+                return '<article class="post-card-stagger bg-surface-pure dark:bg-inverse-surface rounded-xl overflow-hidden whisper-shadow border border-soft-border dark:border-white/10 group transition-all hover:-translate-y-px duration-300" style="animation-delay: ' + (idx * 0.1) + 's;">' +
+                    '<div class="p-4 flex items-center justify-between">' +
+                        '<div class="flex items-center gap-3">' +
+                            '<div class="w-10 h-10 rounded-full border-2 border-primary/20 p-0.5">' + avatarImg + '</div>' +
+                            '<div>' +
+                                '<h3 class="font-headline-md text-[15px] leading-tight text-on-surface dark:text-inverse-on-surface">' + authorName + '</h3>' +
+                                '<div class="flex items-center gap-1.5 mt-0.5">' + locationHtml +
+                                    '<time class="text-technical-label font-technical-label text-muted-zinc">' + timeAgo + '</time>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<button class="text-muted-zinc hover:text-on-surface dark:hover:text-inverse-on-surface transition-colors"><span class="material-symbols-outlined">more_vert</span></button>' +
+                    '</div>' +
+                    imgSection +
+                    '<div class="p-4">' +
+                        '<div class="flex items-center justify-between mb-4">' +
+                            '<div class="flex items-center gap-5">' +
+                                '<button class="flex items-center gap-1.5 text-on-surface dark:text-inverse-on-surface group/action" onclick="toggleLike(\\'' + post.id + '\\', ' + isLiked + ')">' +
+                                    '<span class="material-symbols-outlined text-[24px] ' + heartColor + ' transition-colors" style="' + heartFill + '">favorite</span>' +
+                                    '<span id="like-count-' + post.id + '" class="text-technical-label font-technical-label">' + likeCount + '</span>' +
+                                '</button>' +
+                                '<button class="flex items-center gap-1.5 text-on-surface dark:text-inverse-on-surface group/action" onclick="openPost(\\'' + post.id + '\\')">' +
+                                    '<span class="material-symbols-outlined text-[24px] transition-colors">chat_bubble</span>' +
+                                    '<span class="text-technical-label font-technical-label">' + commentCount + '</span>' +
+                                '</button>' +
+                                '<button class="flex items-center gap-1.5 text-on-surface dark:text-inverse-on-surface group/action">' +
+                                    '<span class="material-symbols-outlined text-[24px] transition-colors">send</span>' +
+                                '</button>' +
+                            '</div>' +
+                            '<button class="text-on-surface dark:text-inverse-on-surface hover:text-primary transition-colors"><span class="material-symbols-outlined text-[24px]">bookmark</span></button>' +
+                        '</div>' +
+                        '<div class="space-y-1">' +
+                            (post.caption ? '<p class="text-body-md font-body-md text-on-surface dark:text-inverse-on-surface"><span class="font-bold">' + authorName + '</span> ' + post.caption + '</p>' : '') +
+                            (commentCount > 0 ? '<button onclick="openPost(\\'' + post.id + '\\')" class="text-technical-label font-technical-label text-muted-zinc hover:text-primary transition-colors">View all ' + commentCount + ' comments</button>' : '') +
+                        '</div>' +
+                    '</div>' +
+                '</article>';
+            }).join('');
+        }
+
+        function toggleLike(postId, isCurrentlyLiked) {
+            const action = isCurrentlyLiked ? 'unlikePost' : 'likePost';
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: action,
+                postId: postId
+            }));
+        }
+
+        function openPost(postId) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'openPost',
+                postId: postId
+            }));
+        }
+
+        function updateLikeUI(postId, isLiked, newCount) {
+            const countEl = document.getElementById('like-count-' + postId);
+            if (countEl) countEl.textContent = newCount;
+        }
+
+        // Load feed on page ready
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'loadFeed' }));
+            }, 300);
         });
     </script>
-
-
 </body></html>`;
+};
 
-export default function Feed() {
+export default function Feed({ navigation }) {
+  const { user } = useAuth();
+  const isDark = useThemeStore((state) => state.isDark);
+  const { setPosts, likePostLocal, unlikePostLocal } = useFeedStore();
+  const webViewRef = useRef(null);
+
+  // Sync Dark/Light Mode
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(`
+      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
+      true;
+    `);
+  }, [isDark]);
+
+  const handleMessage = async (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+
+      if (data.action === 'loadFeed') {
+        const posts = await getAllPosts(20);
+        
+        // Enrich posts with author profiles and like status
+        const enrichedPosts = await Promise.all(
+          posts.map(async (post) => {
+            try {
+              const author = await getUserProfile(post.authorId);
+              const liked = user ? await hasLikedPost(post.id, user.uid) : false;
+              return {
+                ...post,
+                authorName: author?.displayName || 'Explorer',
+                authorPhoto: author?.photoURL || '',
+                isLiked: liked,
+              };
+            } catch (e) {
+              return {
+                ...post,
+                authorName: 'Explorer',
+                authorPhoto: '',
+                isLiked: false,
+              };
+            }
+          })
+        );
+
+        setPosts(enrichedPosts);
+        webViewRef.current?.injectJavaScript(`renderPosts(${JSON.stringify(enrichedPosts)}); true;`);
+      }
+      else if (data.action === 'likePost') {
+        if (!user) {
+          Alert.alert('Login Required', 'Please log in to like posts.');
+          return;
+        }
+        // Optimistic UI update
+        likePostLocal(data.postId);
+        const posts = useFeedStore.getState().posts;
+        const post = posts.find(p => p.id === data.postId);
+        const newCount = post ? post.likesCount : 0;
+        webViewRef.current?.injectJavaScript(`updateLikeUI('${data.postId}', true, ${newCount}); true;`);
+
+        try {
+          await likePost(data.postId, user.uid);
+          // Reload feed to get accurate state
+          webViewRef.current?.injectJavaScript(`
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'loadFeed' }));
+            true;
+          `);
+        } catch (error) {
+          // Rollback on failure
+          unlikePostLocal(data.postId);
+          console.error('[Feed] Like error:', error);
+        }
+      }
+      else if (data.action === 'unlikePost') {
+        if (!user) return;
+        unlikePostLocal(data.postId);
+        const posts = useFeedStore.getState().posts;
+        const post = posts.find(p => p.id === data.postId);
+        const newCount = post ? post.likesCount : 0;
+        webViewRef.current?.injectJavaScript(`updateLikeUI('${data.postId}', false, ${newCount}); true;`);
+
+        try {
+          await unlikePost(data.postId, user.uid);
+          webViewRef.current?.injectJavaScript(`
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'loadFeed' }));
+            true;
+          `);
+        } catch (error) {
+          likePostLocal(data.postId);
+          console.error('[Feed] Unlike error:', error);
+        }
+      }
+      else if (data.action === 'openPost') {
+        navigation.navigate('PostDetail', { postId: data.postId });
+      }
+    } catch (error) {
+      console.error('[Feed] Error handling message:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <WebView 
-        source={{ html: htmlContent }} 
+        ref={webViewRef}
+        source={{ html: getHtmlContent(isDark) }} 
         style={styles.webview}
         originWhitelist={['*']}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onMessage={handleMessage}
       />
     </SafeAreaView>
   );

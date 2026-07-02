@@ -97,28 +97,28 @@ const getHtmlContent = (isDark) => {
             const avatarImg = photo ? '<img alt="' + name + '" class="w-full h-full object-cover" src="' + photo + '">' : '<div class="w-full h-full bg-primary flex items-center justify-center text-white text-3xl font-bold">' + name.charAt(0) + '</div>';
 
             container.innerHTML =
-                '<section class="stagger-reveal text-center" style="animation-delay: 0.1s;">' +
-                    '<div class="w-28 h-28 mx-auto rounded-full overflow-hidden border-4 border-primary/20 mb-4">' + avatarImg + '</div>' +
-                    '<h1 class="text-headline-lg-mobile font-headline-lg-mobile text-on-surface dark:text-inverse-on-surface break-words">' + name + '</h1>' +
-                    '<p class="text-muted-zinc mt-1 break-words">' + email + '</p>' +
-                    '<p class="text-on-surface-variant dark:text-inverse-on-surface/70 mt-2 max-w-sm mx-auto break-words overflow-hidden px-2">' + bio + '</p>' +
+                '<section class="stagger-reveal text-center mb-8" style="animation-delay: 0.1s;">' +
+                    '<div class="w-28 h-28 mx-auto rounded-full overflow-hidden border-4 border-primary/20 mb-4 shadow-sm">' + avatarImg + '</div>' +
+                    '<h1 class="text-3xl font-bold font-headline-lg-mobile text-on-surface dark:text-inverse-on-surface break-words tracking-tight leading-tight">' + name + '</h1>' +
+                    '<p class="text-muted-zinc mt-1 break-words font-medium text-sm">' + email + '</p>' +
+                    '<div class="mt-4 flex justify-center"><p class="text-on-surface-variant dark:text-inverse-on-surface/80 max-w-xs break-words px-4 leading-relaxed">' + bio + '</p></div>' +
                 '</section>' +
-                '<section class="stagger-reveal grid grid-cols-4 gap-3" style="animation-delay: 0.2s;">' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-headline-md font-headline-md text-primary">' + postsCount + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Posts</p>' +
+                '<section class="stagger-reveal grid grid-cols-4 gap-3 mb-8" style="animation-delay: 0.2s;">' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
+                        '<p class="text-xl font-bold font-headline-md text-primary">' + postsCount + '</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Posts</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-headline-md font-headline-md text-primary">' + followers + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Followers</p>' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
+                        '<p class="text-xl font-bold font-headline-md text-primary">' + followers + '</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Followers</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-headline-md font-headline-md text-primary">' + following + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Following</p>' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
+                        '<p class="text-xl font-bold font-headline-md text-primary">' + following + '</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Following</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-headline-md font-headline-md text-tertiary">' + checkinsCount + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Check-ins</p>' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
+                        '<p class="text-xl font-bold font-headline-md text-tertiary">' + checkinsCount + '</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Check-ins</p>' +
                     '</div>' +
                 '</section>' +
                 '<section class="stagger-reveal" style="animation-delay: 0.3s;">' +
@@ -242,6 +242,8 @@ export default function Profile({ navigation }) {
         source={{ html: getHtmlContent(isDark) }} 
         style={styles.webview}
         originWhitelist={['*']}
+        allowFileAccess={true}
+        allowFileAccessFromFileURLs={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         onMessage={handleMessage}

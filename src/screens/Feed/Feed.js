@@ -485,6 +485,8 @@ export default function Feed({ navigation }) {
         source={{ html: getHtmlContent(isDark) }} 
         style={styles.webview}
         originWhitelist={['*']}
+        allowFileAccess={true}
+        allowFileAccessFromFileURLs={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         onMessage={handleMessage}

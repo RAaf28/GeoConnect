@@ -1,14 +1,24 @@
-import React, { useRef, useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore } from '../../store/stores';
+import { getUserProfile, updateUserProfile as updateFirestoreProfile } from '../../services/firestoreService';
+import { updateUserProfile as updateAuthProfile } from '../../services/authService';
+import { useAuthStore } from '../../store/stores';
 
-const getHtmlContent = (isDark) => {
-  // Base HTML string from the user's provided code, with the back button made functional
-  let html = `<!DOCTYPE html>
-<html class="light" lang="en"><head>
+const getHtmlContent = (isDark, user, profile) => {
+  const displayName = user?.displayName || profile?.displayName || 'Explorer';
+  const email = user?.email || profile?.email || '';
+  const phone = profile?.phone || '';
+  const address = profile?.address || '';
+  const bio = profile?.bio || '';
+  const photoURL = user?.photoURL || profile?.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(displayName) + '&background=4648d4&color=fff&size=128';
+
+  return `<!DOCTYPE html>
+<html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>GeoConnect - Personal Information</title>
@@ -20,290 +30,196 @@ const getHtmlContent = (isDark) => {
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <!-- Material Symbols -->
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <script id="tailwind-config">
       tailwind.config = {
         darkMode: "class",
         theme: {
           extend: {
             "colors": {
-                    "on-secondary-fixed": "#002113",
-                    "surface-dim": "#cbdbf5",
-                    "tertiary-fixed-dim": "#ffb693",
-                    "on-secondary-container": "#00714d",
-                    "surface-container-highest": "#d3e4fe",
-                    "inverse-primary": "#c0c1ff",
-                    "error-container": "#ffdad6",
-                    "on-tertiary-container": "#ffcab2",
-                    "surface-variant": "#d3e4fe",
-                    "tertiary-container": "#9d3f00",
-                    "on-background": "#0b1c30",
-                    "on-secondary-fixed-variant": "#005236",
-                    "on-tertiary-fixed": "#351000",
-                    "on-secondary": "#ffffff",
-                    "surface-container-low": "#eff4ff",
-                    "secondary-fixed": "#6ffbbe",
-                    "tertiary-fixed": "#ffdbcc",
-                    "surface-glass": "rgba(255, 255, 255, 0.7)",
-                    "border-glass": "rgba(255, 255, 255, 0.3)",
-                    "danger": "#ef4444",
-                    "on-error": "#ffffff",
-                    "on-primary-fixed": "#06006c",
-                    "on-primary": "#ffffff",
-                    "on-primary-container": "#d1d1ff",
-                    "primary": "#2c2abc",
-                    "surface-container": "#e5eeff",
-                    "bg-gradient-start": "#f8fafc",
-                    "surface-container-lowest": "#ffffff",
-                    "on-error-container": "#93000a",
-                    "primary-fixed-dim": "#c0c1ff",
-                    "tertiary": "#772e00",
-                    "surface": "#f8f9ff",
-                    "on-tertiary": "#ffffff",
-                    "on-surface-variant": "#464554",
-                    "inverse-on-surface": "#eaf1ff",
-                    "on-tertiary-fixed-variant": "#7a2f00",
-                    "outline-variant": "#c6c5d7",
-                    "bg-gradient-end": "#e2e8f0",
-                    "on-primary-fixed-variant": "#2e2ebe",
-                    "outline": "#767586",
-                    "secondary-fixed-dim": "#4edea3",
-                    "primary-container": "#4648d4",
-                    "error": "#ba1a1a",
-                    "secondary": "#006c49",
-                    "surface-container-high": "#dce9ff",
-                    "background": "#f8f9ff",
-                    "on-surface": "#0b1c30",
-                    "primary-fixed": "#e1e0ff",
-                    "surface-tint": "#484bd6",
-                    "surface-bright": "#f8f9ff",
-                    "inverse-surface": "#213145",
-                    "secondary-container": "#6cf8bb"
-            },
-            "borderRadius": {
-                    "DEFAULT": "0.25rem",
-                    "lg": "0.5rem",
-                    "xl": "0.75rem",
-                    "full": "9999px"
-            },
-            "spacing": {
-                    "gutter": "24px",
-                    "margin-desktop": "40px",
-                    "container-max": "1200px",
-                    "margin-mobile": "16px",
-                    "unit": "4px"
+              "primary": "#4648d4",
+              "primary-container": "#6063ee",
+              "on-primary": "#ffffff",
+              "surface": "#fcf8ff",
+              "on-surface": "#1b1b23",
+              "surface-variant": "#e4e1ed",
+              "on-surface-variant": "#464554",
+              "outline-variant": "#c7c4d7",
+              "surface-container-low": "#f5f2fe",
+              "surface-glass": "rgba(252, 248, 255, 0.7)",
+              "border-glass": "rgba(226, 232, 240, 0.3)",
             },
             "fontFamily": {
-                    "headline-lg-mobile": ["Plus Jakarta Sans"],
-                    "headline-md": ["Plus Jakarta Sans"],
-                    "body-md": ["Plus Jakarta Sans"],
-                    "headline-lg": ["Plus Jakarta Sans"],
-                    "display": ["Plus Jakarta Sans"],
-                    "label-sm": ["Plus Jakarta Sans"],
-                    "body-lg": ["Plus Jakarta Sans"],
-                    "label-md": ["Plus Jakarta Sans"]
-            },
-            "fontSize": {
-                    "headline-lg-mobile": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
-                    "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "600"}],
-                    "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                    "headline-lg": ["32px", {"lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "700"}],
-                    "display": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
-                    "label-sm": ["12px", {"lineHeight": "1.2", "fontWeight": "500"}],
-                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                    "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "600"}]
+              "headline-md": ["Plus Jakarta Sans"],
+              "body-md": ["Plus Jakarta Sans"],
+              "label-md": ["Plus Jakarta Sans"],
+              "label-sm": ["Plus Jakarta Sans"]
             }
-          },
-        },
+          }
+        }
       }
     </script>
 <style>
         body {
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            background: #fcf8ff;
             min-height: 100vh;
         }
+        .dark body { background: #1b1b23; color: #f2effb; }
         .glass-panel {
             background: rgba(255, 255, 255, 0.7);
             backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        .dark .glass-panel {
+            background: rgba(48, 48, 56, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
         }
-        .active-icon {
-            font-variation-settings: 'FILL' 1;
-        }
     </style>
-<style>
-    body {
-      min-height: max(884px, 100dvh);
-    }
-  </style>
-  </head>
-<body class="font-body-md text-on-surface">
-<!-- Top Navigation Bar (Shared Component Strategy) -->
-<header class="fixed top-0 w-full z-50 bg-surface-glass backdrop-blur-lg border-b border-glass shadow-sm">
-<div class="flex justify-between items-center px-gutter h-16 w-full max-w-container-max mx-auto">
+</head>
+<body class="font-body-md text-on-surface dark:text-gray-100">
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-[#1b1b23]/80 backdrop-blur-lg border-b border-border-glass shadow-sm">
+<div class="flex justify-between items-center px-4 h-16 w-full max-w-2xl mx-auto">
 <div class="flex items-center gap-4">
-<button class="p-2 rounded-full hover:bg-surface-container-low transition-colors active:scale-95 duration-150" onclick="window.ReactNativeWebView.postMessage('goBack')">
+<button class="p-2 rounded-full hover:bg-surface-container-low dark:hover:bg-white/10 transition-colors active:scale-95" onclick="sendMsg('goBack')">
 <span class="material-symbols-outlined text-primary">arrow_back</span>
 </button>
-<h1 class="font-headline-md text-headline-md text-on-surface">Personal Information</h1>
-</div>
-<div class="flex items-center">
-<button class="p-2 rounded-full hover:bg-surface-container-low transition-colors">
-<span class="material-symbols-outlined text-primary">account_circle</span>
-</button>
+<h1 class="font-headline-md text-xl font-bold">Personal Info</h1>
 </div>
 </div>
 </header>
-<main class="pt-24 pb-32 px-gutter max-w-[800px] mx-auto">
-<!-- Breadcrumbs -->
-<nav class="mb-8 flex items-center gap-2 text-on-surface-variant font-label-sm">
-<span>Settings</span>
-<span class="material-symbols-outlined text-[16px]">chevron_right</span>
-<span class="text-primary font-bold">Personal Information</span>
-</nav>
+
+<main class="pt-24 pb-12 px-4 max-w-2xl mx-auto">
 <!-- User Profile Section -->
-<section class="glass-panel rounded-xl p-8 mb-10 relative overflow-hidden">
-<!-- Decorative atmospheric light -->
-<div class="absolute -top-12 -right-12 w-32 h-32 bg-primary/5 blur-3xl rounded-full"></div>
+<section class="glass-panel rounded-xl p-8 mb-6 relative overflow-hidden">
 <div class="flex flex-col items-center">
 <div class="relative">
-<div class="w-32 h-32 rounded-full border-4 border-white shadow-xl overflow-hidden glass-panel">
-<img class="w-full h-full object-cover" data-alt="A professional studio portrait of Alex Rivera, a young Hispanic male professional with a confident smile. He has short dark hair and is wearing a sleek indigo blazer. The background is a soft, out-of-focus modern office space with high-key lighting, maintaining a clean glassmorphic aesthetic and indigo primary color accents. The mood is sophisticated and approachable." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-f5IA7pFiWgRo1aC9297lKcc_O5SBgWXT3RQw6dhuh4aPgLKl7_CzbqH1hDWP5iuxXM0WnT_ExX1O8ldh3LKOTPf2X2HXPCiEmI789pcQwgvBWQz60OMASI9QNFdoYrcFD7rZCQQU4H-aQYWydpaBL3c-w7JUB1bM0rU2vKSsZ4hNlJx-F1J7X4A3D__4Kky8C86HDU60wuIuux-tMVW33pRy2DutmTqua5MMNXsC9Kd3W_S0DNVc_zymkjUbAa413Sfnv4vHwo4R"/>
+<div class="w-32 h-32 rounded-full border-4 border-white dark:border-gray-700 shadow-xl overflow-hidden bg-surface-variant">
+<img id="profileImage" class="w-full h-full object-cover" src="${photoURL}"/>
 </div>
-<button class="absolute bottom-0 right-0 bg-primary text-on-primary p-2 rounded-full shadow-lg hover:bg-primary-container transition-all active:scale-90 border-2 border-white flex items-center justify-center">
+<button onclick="sendMsg('editPhoto')" class="absolute bottom-0 right-0 bg-primary text-white p-2 rounded-full shadow-lg hover:bg-primary-container transition-all active:scale-90 border-2 border-white dark:border-gray-700 flex items-center justify-center">
 <span class="material-symbols-outlined text-[20px]">edit</span>
 </button>
 </div>
 <div class="mt-4 text-center">
-<h2 class="font-headline-md text-headline-md">Alex Rivera</h2>
-<p class="text-on-surface-variant font-body-md">Product Lead at GeoConnect</p>
+<h2 id="displayTitle" class="font-headline-md text-2xl font-bold">${displayName}</h2>
+<p class="text-on-surface-variant dark:text-gray-400 font-body-md">${email}</p>
 </div>
 </div>
 </section>
+
 <!-- Form Fields Section -->
-<section class="glass-panel rounded-xl p-8 space-y-10">
-<h3 class="font-headline-md text-headline-md mb-6 border-b border-glass pb-4">Contact Details</h3>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<section class="glass-panel rounded-xl p-6 space-y-6">
+<h3 class="font-headline-md text-xl font-bold mb-4 border-b border-border-glass pb-4">Contact Details</h3>
+<div class="space-y-4">
 <!-- Full Name -->
-<div class="space-y-2">
-<label class="block font-label-md text-on-surface-variant ml-1">Full Name</label>
+<div class="space-y-1">
+<label class="block font-label-md text-sm text-on-surface-variant dark:text-gray-400 ml-1">Full Name</label>
 <div class="relative group">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">person</span>
-<input class="w-full bg-white/30 border border-glass rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="text" value="Alex Rivera"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant dark:text-gray-400 group-focus-within:text-primary transition-colors">person</span>
+<input id="inputName" class="w-full bg-white dark:bg-gray-800 border border-outline-variant dark:border-gray-700 rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="text" value="${displayName}"/>
 </div>
 </div>
-<!-- Email Address -->
-<div class="space-y-2">
-<label class="block font-label-md text-on-surface-variant ml-1">Email Address</label>
+
+<!-- About Me (Bio) -->
+<div class="space-y-1">
+<label class="block font-label-md text-sm text-on-surface-variant dark:text-gray-400 ml-1">About Me</label>
 <div class="relative group">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">mail</span>
-<input class="w-full bg-white/30 border border-glass rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="email" value="alex.rivera@geoconnect.io"/>
+<span class="material-symbols-outlined absolute left-3 top-4 text-on-surface-variant dark:text-gray-400 group-focus-within:text-primary transition-colors">notes</span>
+<textarea id="inputBio" rows="3" class="w-full bg-white dark:bg-gray-800 border border-outline-variant dark:border-gray-700 rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md resize-none" placeholder="Write a short bio about yourself...">${bio}</textarea>
 </div>
 </div>
+
 <!-- Phone Number -->
-<div class="space-y-2">
-<label class="block font-label-md text-on-surface-variant ml-1">Phone Number</label>
+<div class="space-y-1">
+<label class="block font-label-md text-sm text-on-surface-variant dark:text-gray-400 ml-1">Phone Number</label>
 <div class="relative group">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">call</span>
-<input class="w-full bg-white/30 border border-glass rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="tel" value="+1 555 0123"/>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant dark:text-gray-400 group-focus-within:text-primary transition-colors">call</span>
+<input id="inputPhone" class="w-full bg-white dark:bg-gray-800 border border-outline-variant dark:border-gray-700 rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="tel" value="${phone}" placeholder="Add phone number"/>
 </div>
 </div>
+
 <!-- Location -->
-<div class="space-y-2">
-<label class="block font-label-md text-on-surface-variant ml-1">Home Address</label>
+<div class="space-y-1">
+<label class="block font-label-md text-sm text-on-surface-variant dark:text-gray-400 ml-1">Home Address</label>
 <div class="relative group">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">location_on</span>
-<input class="w-full bg-white/30 border border-glass rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="text" value="San Francisco, CA"/>
-</div>
-</div>
-</div>
-<!-- Additional Options -->
-<div class="pt-6 border-t border-glass">
-<div class="flex items-center justify-between p-4 rounded-lg hover:bg-surface-container-low transition-colors cursor-pointer group">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-on-surface-variant">verified_user</span>
-<div>
-<p class="font-label-md text-on-surface">Two-Factor Authentication</p>
-<p class="text-label-sm text-on-surface-variant">Extra security for your personal data</p>
-</div>
-</div>
-<div class="w-12 h-6 bg-secondary-container rounded-full relative transition-colors p-1 flex items-center justify-end">
-<div class="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant dark:text-gray-400 group-focus-within:text-primary transition-colors">location_on</span>
+<input id="inputAddress" class="w-full bg-white dark:bg-gray-800 border border-outline-variant dark:border-gray-700 rounded-lg py-3 pl-11 pr-4 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-md" type="text" value="${address}" placeholder="Add home address"/>
 </div>
 </div>
 </div>
 </section>
-<!-- Save Button -->
-<div class="mt-12 flex justify-end gap-4">
-<button class="px-8 py-3 rounded-xl border border-glass text-primary font-label-md hover:bg-primary/5 transition-all">Cancel</button>
-<button class="px-10 py-3 rounded-xl bg-primary text-on-primary font-label-md shadow-lg shadow-primary/20 hover:bg-primary-container transition-all active:scale-95 flex items-center gap-2">
-                Save Changes
-                <span class="material-symbols-outlined text-[18px]">check_circle</span>
+
+<!-- Actions -->
+<div class="mt-8 flex flex-col sm:flex-row justify-end gap-3">
+<button onclick="sendMsg('goBack')" class="px-6 py-3 rounded-xl border border-outline-variant dark:border-gray-700 text-on-surface dark:text-gray-300 font-bold hover:bg-surface-variant/50 dark:hover:bg-gray-800 transition-all text-center">Cancel</button>
+<button onclick="saveChanges()" id="saveBtn" class="px-6 py-3 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:bg-primary-container transition-all active:scale-95 flex items-center justify-center gap-2">
+<span>Save Changes</span>
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
 </button>
 </div>
 </main>
-<!-- Bottom Navigation Bar (Mobile Visibility Check) -->
-<nav class="md:hidden fixed bottom-0 w-full z-50 bg-surface-glass backdrop-blur-lg border-t border-glass shadow-lg">
-<div class="flex justify-around items-center h-20 w-full pb-safe">
-<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
-<span class="material-symbols-outlined">home</span>
-<span class="text-label-md font-label-md">Home</span>
-</div>
-<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
-<span class="material-symbols-outlined">lock</span>
-<span class="text-label-md font-label-md">Security</span>
-</div>
-<div class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all">
-<span class="material-symbols-outlined">shield</span>
-<span class="text-label-md font-label-md">Privacy</span>
-</div>
-<!-- Active State: Account -->
-<div class="flex flex-col items-center justify-center text-primary dark:text-secondary-fixed-dim bg-primary-container/10 rounded-xl px-3 py-1">
-<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person</span>
-<span class="text-label-md font-label-md font-bold">Account</span>
-</div>
-</div>
-</nav>
-<!-- Micro-interactions Script -->
+
 <script>
-        document.querySelectorAll('input').forEach(input => {
-            input.addEventListener('focus', () => {
-                input.parentElement.parentElement.classList.add('scale-[1.01]');
-            });
-            input.addEventListener('blur', () => {
-                input.parentElement.parentElement.classList.remove('scale-[1.01]');
-            });
-        });
+    let currentPhotoUrl = "${photoURL}";
 
-        // Toggle simulation
-        const toggle = document.querySelector('.bg-secondary-container');
-        toggle?.addEventListener('click', function() {
-            if(this.classList.contains('bg-secondary-container')) {
-                this.classList.replace('bg-secondary-container', 'bg-outline-variant');
-                this.classList.replace('justify-end', 'justify-start');
-            } else {
-                this.classList.replace('bg-outline-variant', 'bg-secondary-container');
-                this.classList.replace('justify-start', 'justify-end');
-            }
-        });
-    </script>
+    function sendMsg(action, data = {}) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ action, ...data }));
+    }
+
+    function saveChanges() {
+        const name = document.getElementById('inputName').value.trim();
+        const bio = document.getElementById('inputBio').value.trim();
+        const phone = document.getElementById('inputPhone').value.trim();
+        const address = document.getElementById('inputAddress').value.trim();
+
+        if (!name) {
+            alert("Name cannot be empty");
+            return;
+        }
+
+        const btn = document.getElementById('saveBtn');
+        btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span><span>Saving...</span>';
+        btn.classList.add('opacity-80', 'pointer-events-none');
+
+        sendMsg('saveChanges', { name, bio, phone, address, photoURL: currentPhotoUrl });
+    }
+
+    function updatePhotoPreview(url) {
+        currentPhotoUrl = url;
+        document.getElementById('profileImage').src = url;
+    }
+
+    // Update title dynamically as name is typed
+    document.getElementById('inputName').addEventListener('input', function(e) {
+        document.getElementById('displayTitle').textContent = e.target.value || 'Explorer';
+    });
+</script>
 </body></html>`;
-
-  // Replace the back button to make it functional (already done in the string above, but we do it again for safety)
-  // Actually, we already added the onclick in the string above, so we don't need to replace again.
-  // But note: the string above already has the onclick on the back button.
-
-  return html;
 };
 
 export default function PersonalInformation({ navigation }) {
   const { user } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
+  const [profile, setProfile] = useState(null);
   const webViewRef = useRef(null);
 
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (user) {
+        try {
+          const userProfile = await getUserProfile(user.uid);
+          setProfile(userProfile);
+        } catch (error) {
+          console.error("Error loading profile:", error);
+        }
+      }
+    };
+    loadProfile();
+  }, [user]);
+
+  // Inject dark mode class if needed
   useEffect(() => {
     webViewRef.current?.injectJavaScript(`
       document.documentElement.className = "${isDark ? 'dark' : 'light'}";
@@ -313,11 +229,66 @@ export default function PersonalInformation({ navigation }) {
 
   const handleMessage = async (event) => {
     try {
-      const data = event.nativeEvent.data;
-      if (data === 'goBack') {
+      const data = JSON.parse(event.nativeEvent.data);
+      
+      if (data.action === 'goBack') {
         navigation.goBack();
+      } else if (data.action === 'editPhoto') {
+        const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permissionResult.granted) {
+          Alert.alert('Permission required', 'We need camera roll permissions to change your photo.');
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+
+        if (!result.canceled) {
+          // Send back to webview to update preview instantly
+          webViewRef.current?.injectJavaScript(`updatePhotoPreview('${result.assets[0].uri}'); true;`);
+        }
+      } else if (data.action === 'saveChanges') {
+        if (!user) return;
+        
+        try {
+          // Update Firebase Auth (Display Name & Photo URL)
+          const updatedUser = await updateAuthProfile(data.name, data.photoURL);
+
+          // Update Firestore Profile (Phone, Address, and mirrors for display)
+          await updateFirestoreProfile(user.uid, {
+            displayName: data.name,
+            bio: data.bio,
+            photoURL: data.photoURL,
+            phone: data.phone,
+            address: data.address,
+          });
+
+          // Update Zustand Auth Store to reflect globally
+          const store = useAuthStore.getState();
+          store.setUser({
+            ...updatedUser,
+            displayName: data.name,
+            photoURL: data.photoURL,
+          });
+
+          Alert.alert("Success", "Personal information updated successfully.");
+          navigation.goBack();
+        } catch (error) {
+          console.error("Error updating personal information:", error);
+          Alert.alert("Error", "Failed to update information. Please try again.");
+          // Reset button state in WebView on error
+          webViewRef.current?.injectJavaScript(`
+            const btn = document.getElementById('saveBtn');
+            btn.innerHTML = '<span>Save Changes</span><span class="material-symbols-outlined text-[18px]">check_circle</span>';
+            btn.classList.remove('opacity-80', 'pointer-events-none');
+            true;
+          `);
+        }
       }
-      // Note: We could handle other messages here in the future (like saving changes)
     } catch (error) {
       console.error('[PersonalInformation] Error handling message:', error);
     }
@@ -327,9 +298,11 @@ export default function PersonalInformation({ navigation }) {
     <SafeAreaView style={styles.container}>
       <WebView
         ref={webViewRef}
-        source={{ html: getHtmlContent(isDark) }}
+        source={{ html: getHtmlContent(isDark, user, profile) }}
         style={styles.webview}
         originWhitelist={['*']}
+        allowFileAccess={true}
+        allowFileAccessFromFileURLs={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         onMessage={handleMessage}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,12 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/stores';
 import { updateUserProfile } from '../../services/authService';
-import { updateUserProfile as updateFirestoreProfile } from '../../services/firestoreService';
+import { getUserProfile, updateUserProfile as updateFirestoreProfile } from '../../services/firestoreService';
 import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,8 +20,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function EditProfile({ navigation }) {
   const { user } = useAuth();
   const [name, setName] = useState(user?.displayName || '');
+  const [bio, setBio] = useState('');
   const [photoUrl, setPhotoUrl] = useState(user?.photoURL || '');
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user?.uid) {
+        try {
+          const profile = await getUserProfile(user.uid);
+          if (profile?.bio) {
+            setBio(profile.bio);
+          }
+        } catch (e) {
+          console.error("Failed to load profile for edit", e);
+        }
+      }
+    };
+    fetchProfile();
+  }, [user]);
 
   const pickImage = async () => {
     // Request permissions
@@ -37,8 +55,8 @@ export default function EditProfile({ navigation }) {
       quality: 1,
     });
 
-    if (!result.cancelled) {
-      setPhotoUrl(result.uri);
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setPhotoUrl(result.assets[0].uri);
     }
   };
 
@@ -56,6 +74,7 @@ export default function EditProfile({ navigation }) {
       // Update Firestore
       await updateFirestoreProfile(user.uid, {
         displayName: name.trim(),
+        bio: bio.trim(),
         photoURL: photoUrl || undefined,
       });
 
@@ -115,6 +134,19 @@ export default function EditProfile({ navigation }) {
                 onChangeText={setName}
                 placeholder="Enter your display name"
                 autoCapitalize="words"
+                placeholderTextColor="#64748B"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>About Me</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Write a short bio about yourself..."
+                multiline
+                numberOfLines={3}
                 placeholderTextColor="#64748B"
               />
             </View>
@@ -228,14 +260,19 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   input: {
-    height: 48,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 12,
     paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 16,
     color: '#1b1b23',
     backgroundColor: '#fff',
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
   },
   actionSection: {
     padding: 24,

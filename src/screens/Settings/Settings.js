@@ -168,7 +168,7 @@ const getHtmlContent = (user) => {
 <span class="material-symbols-outlined text-[14px] mr-1" style="font-variation-settings: 'FILL' 1;">verified</span> Verified Explorer
                 </span>
 </div>
-<button class="ml-auto p-2 text-primary hover:bg-primary-container/10 rounded-full transition-all">
+<button class="ml-auto p-2 text-primary hover:bg-primary-container/10 rounded-full transition-all" onclick="window.ReactNativeWebView.postMessage('navigateEditProfile')">
 <span class="material-symbols-outlined">edit</span>
 </button>
 </section>
@@ -188,7 +188,7 @@ const getHtmlContent = (user) => {
 </div>
 <span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
 </div>
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigatePrivacy')">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigateLoginSecurity')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
 <span class="material-symbols-outlined">shield</span>
@@ -233,7 +233,7 @@ const getHtmlContent = (user) => {
 <div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
 </div>
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigateLocationSettings')">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors group">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-tertiary-fixed/30 flex items-center justify-center text-tertiary">
 <span class="material-symbols-outlined">location_on</span>
@@ -243,8 +243,8 @@ const getHtmlContent = (user) => {
 <p class="text-on-surface-variant text-[12px]">Precise discovery mode</p>
 </div>
 </div>
-<label class="relative inline-flex items-center cursor-pointer">
-<input class="sr-only peer" type="checkbox"/>
+<label class="relative inline-flex items-center cursor-pointer" onclick="event.stopPropagation()">
+<input id="locationToggle" class="sr-only peer" type="checkbox" onchange="window.ReactNativeWebView.postMessage(JSON.stringify({action:'toggleLocation', enabled: this.checked}))"/>
 <div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
 </div>
@@ -264,15 +264,15 @@ const getHtmlContent = (user) => {
 <span>100 km</span>
 </div>
 <div class="mt-8 grid grid-cols-2 gap-3">
-<div class="p-4 rounded-xl border border-soft-hover border-primary/30 transition-colors group cursor-pointer" onclick="window.ReactNativeWebView.postMessage('navigateMapTheme')">
+<div class="p-4 rounded-xl border border-soft-border border-primary/30 transition-colors group cursor-pointer" onclick="openMapThemeModal()">
 <span class="material-symbols-outlined text-primary mb-2">map</span>
 <p class="font-bold text-[14px]">Map Theme</p>
-<p class="text-[12px] text-on-surface-variant">Terrain High-Def</p>
+<p id="currentMapTheme" class="text-[12px] text-on-surface-variant">Standard</p>
 </div>
-<div class="p-4 rounded-xl border border-soft-border hover:border-primary/30 transition-colors group cursor-pointer" onclick="window.ReactNativeWebView.postMessage('navigateOverlays')">
+<div class="p-4 rounded-xl border border-soft-border hover:border-primary/30 transition-colors group cursor-pointer" onclick="openOverlaysModal()">
 <span class="material-symbols-outlined text-primary mb-2">layers</span>
 <p class="font-bold text-[14px]">Overlays</p>
-<p class="text-[12px] text-on-surface-variant">Social Heatmap</p>
+<p id="currentOverlay" class="text-[12px] text-on-surface-variant">None</p>
 </div>
 </div>
 </div>
@@ -286,9 +286,118 @@ const getHtmlContent = (user) => {
 <p class="text-center text-[10px] text-muted-zinc mt-8 font-technical-label uppercase tracking-widest">GeoConnect Version 2.4.0 (Stable)</p>
 </div>
 </main>
-<!-- BottomNavBar -->
+
+<!-- Map Theme Modal -->
+<div id="mapThemeModal" class="fixed inset-0 z-[100] flex items-end justify-center" style="display:none;">
+<div class="absolute inset-0 bg-black/40" onclick="closeMapThemeModal()"></div>
+<div class="relative w-full max-w-2xl bg-surface-pure rounded-t-2xl p-6 shadow-2xl" style="animation: slideUp 0.3s ease-out;">
+<div class="w-12 h-1 bg-outline-variant rounded-full mx-auto mb-4"></div>
+<h3 class="font-bold text-lg text-on-surface mb-4">Map Theme</h3>
+<div class="space-y-2" id="mapThemeOptions">
+<label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<input type="radio" name="mapTheme" value="standard" class="accent-primary w-4 h-4" onchange="selectMapTheme('Standard')" checked/>
+<span class="material-symbols-outlined text-primary">map</span>
+<span class="font-bold">Standard</span>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<input type="radio" name="mapTheme" value="terrain" class="accent-primary w-4 h-4" onchange="selectMapTheme('Terrain')"/>
+<span class="material-symbols-outlined text-primary">terrain</span>
+<span class="font-bold">Terrain</span>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<input type="radio" name="mapTheme" value="satellite" class="accent-primary w-4 h-4" onchange="selectMapTheme('Satellite')"/>
+<span class="material-symbols-outlined text-primary">satellite_alt</span>
+<span class="font-bold">Satellite</span>
+</label>
+<label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<input type="radio" name="mapTheme" value="dark" class="accent-primary w-4 h-4" onchange="selectMapTheme('Dark Mode')"/>
+<span class="material-symbols-outlined text-primary">dark_mode</span>
+<span class="font-bold">Dark Mode</span>
+</label>
+</div>
+<button onclick="closeMapThemeModal()" class="w-full mt-4 py-3 bg-primary text-on-primary font-bold rounded-xl">Done</button>
+</div>
+</div>
+
+<!-- Overlays Modal -->
+<div id="overlaysModal" class="fixed inset-0 z-[100] flex items-end justify-center" style="display:none;">
+<div class="absolute inset-0 bg-black/40" onclick="closeOverlaysModal()"></div>
+<div class="relative w-full max-w-2xl bg-surface-pure rounded-t-2xl p-6 shadow-2xl" style="animation: slideUp 0.3s ease-out;">
+<div class="w-12 h-1 bg-outline-variant rounded-full mx-auto mb-4"></div>
+<h3 class="font-bold text-lg text-on-surface mb-4">Map Overlays</h3>
+<div class="space-y-2" id="overlayOptions">
+<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">whatshot</span>
+<span class="font-bold">Social Heatmap</span>
+</div>
+<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
+</label>
+<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">traffic</span>
+<span class="font-bold">Traffic</span>
+</div>
+<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
+</label>
+<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">place</span>
+<span class="font-bold">Points of Interest</span>
+</div>
+<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
+</label>
+<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">event</span>
+<span class="font-bold">Events</span>
+</div>
+<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
+</label>
+</div>
+<button onclick="closeOverlaysModal()" class="w-full mt-4 py-3 bg-primary text-on-primary font-bold rounded-xl">Done</button>
+</div>
+</div>
+
+<style>
+@keyframes slideUp {
+from { transform: translateY(100%); }
+to { transform: translateY(0); }
+}
+</style>
 
 <script>
+        // Map Theme Modal
+        function openMapThemeModal() {
+            document.getElementById('mapThemeModal').style.display = 'flex';
+        }
+        function closeMapThemeModal() {
+            document.getElementById('mapThemeModal').style.display = 'none';
+        }
+        function selectMapTheme(themeName) {
+            document.getElementById('currentMapTheme').textContent = themeName;
+            window.ReactNativeWebView.postMessage(JSON.stringify({action: 'setMapTheme', theme: themeName}));
+        }
+
+        // Overlays Modal
+        function openOverlaysModal() {
+            document.getElementById('overlaysModal').style.display = 'flex';
+        }
+        function closeOverlaysModal() {
+            document.getElementById('overlaysModal').style.display = 'none';
+        }
+        function updateOverlayLabel() {
+            var checkboxes = document.querySelectorAll('#overlayOptions input[type=checkbox]:checked');
+            var labels = [];
+            checkboxes.forEach(function(cb) {
+                var label = cb.closest('label').querySelector('.font-bold').textContent;
+                labels.push(label);
+            });
+            var display = labels.length > 0 ? labels.join(', ') : 'None';
+            document.getElementById('currentOverlay').textContent = display;
+            window.ReactNativeWebView.postMessage(JSON.stringify({action: 'setOverlays', overlays: labels}));
+        }
+
         // Micro-interactions for tactile feedback
         document.querySelectorAll('button, .cursor-pointer').forEach(el => {
             el.addEventListener('mousedown', () => {
@@ -333,37 +442,54 @@ export default function Settings({ navigation }) {
         source={{ html: getHtmlContent(user) }}
         style={styles.webview}
         originWhitelist={['*']}
+        allowFileAccess={true}
+        allowFileAccessFromFileURLs={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         onMessage={async (event) => {
-          const action = event.nativeEvent.data;
-          if (action === 'goBack') {
-            navigation.goBack();
-          } else if (action === 'openPrivacySettings') {
-            navigation.navigate('PrivacySettings');
-          } else if (action === 'navigateProfile') {
-            navigation.navigate('Profile');
-          } else if (action === 'navigatePersonalInformation') {
-            navigation.navigate('PersonalInformation');
-          } else if (action === 'navigatePrivacy') {
-            navigation.navigate('PrivacySettings');
-          } else if (action === 'navigateNotifications') {
-            navigation.navigate('Notifications');
-          } else if (action === 'navigateLocationSettings') {
-            // For now, navigate to PrivacySettings as a placeholder
-            navigation.navigate('PrivacySettings');
-          } else if (action === 'navigateMapTheme') {
-            // For now, navigate to PrivacySettings as a placeholder
-            navigation.navigate('PrivacySettings');
-          } else if (action === 'navigateOverlays') {
-            // For now, navigate to PrivacySettings as a placeholder
-            navigation.navigate('PrivacySettings');
-          } else if (action === 'performLogout') {
-            try {
-              await logOut();
-            } catch (error) {
-              Alert.alert("Logout Error", error.message);
+          try {
+            // First check if it's a JSON string
+            let action;
+            let data = {};
+            if (event.nativeEvent.data.startsWith('{')) {
+              data = JSON.parse(event.nativeEvent.data);
+              action = data.action;
+            } else {
+              action = event.nativeEvent.data;
             }
+
+            if (action === 'goBack') {
+              navigation.goBack();
+            } else if (action === 'openPrivacySettings') {
+              navigation.navigate('PrivacySettings');
+            } else if (action === 'navigateProfile') {
+              navigation.navigate('Profile');
+            } else if (action === 'navigateEditProfile') {
+              navigation.navigate('EditProfile');
+            } else if (action === 'navigatePersonalInformation') {
+              navigation.navigate('PersonalInformation');
+            } else if (action === 'navigateLoginSecurity') {
+              Alert.alert('Coming Soon', 'Login & Security features are currently under development.');
+            } else if (action === 'navigateNotifications') {
+              navigation.navigate('Notifications');
+            } else if (action === 'toggleLocation') {
+               // Location toggle logic can be handled here or passed to a store
+               console.log('Location tracking toggled:', data.enabled);
+            } else if (action === 'setMapTheme') {
+               console.log('Map theme set to:', data.theme);
+               // In a real app, you would save this to a store or AsyncStorage
+            } else if (action === 'setOverlays') {
+               console.log('Overlays set to:', data.overlays);
+               // In a real app, you would save this to a store or AsyncStorage
+            } else if (action === 'performLogout') {
+              try {
+                await logOut();
+              } catch (error) {
+                Alert.alert("Logout Error", error.message);
+              }
+            }
+          } catch (e) {
+            console.error('Error handling Settings message', e);
           }
         }}
       />

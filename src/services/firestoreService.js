@@ -66,7 +66,7 @@ export const getUserProfile = async (userId) => {
  */
 export const updateUserProfile = async (userId, updates) => {
   try {
-    await updateDoc(doc(firestore, "users", userId), updates);
+    await setDoc(doc(firestore, "users", userId), updates, { merge: true });
   } catch (error) {
     throw error;
   }
@@ -83,9 +83,9 @@ export const updateUserProfile = async (userId, updates) => {
  */
 export const updateLocationPrivacy = async (userId, privacySettings) => {
   try {
-    await updateDoc(doc(firestore, "users", userId), {
+    await setDoc(doc(firestore, "users", userId), {
       locationPrivacy: privacySettings,
-    });
+    }, { merge: true });
   } catch (error) {
     throw error;
   }

@@ -15,7 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'expo-image';
 import { useAuth } from '../../hooks/useAuth';
-import { useThemeStore, useLocationStore } from '../../store/stores';
+import { useThemeStore, useMapSettingsStore, useLocationStore } from '../../store/stores';
+import { getMapViewConfig } from '../../utils/mapTheme';
 import { useWatchLocation, useLocationPermission } from '../../hooks/useLocation';
 import { subscribeToPostsNearby, subscribeToEventsNearby, getUserProfile } from '../../services/firestoreService';
 import { encodeGeoHash, getGeoHashPrecisionForRadius } from '../../utils/geoUtils';
@@ -38,26 +39,7 @@ const RADIUS_OPTIONS = [
   { label: '5km', value: 5.0 },
 ];
 
-// Dark mode map style for Google Maps
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#212121' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#757575' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#181818' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#181818' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#2c2c2c' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#8a8a8a' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#373737' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
-  { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#4e4e4e' }] },
-  { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] },
-];
+// Dark mode map style lives in mapTheme util (getMapViewConfig)
 
 // Post card component for the bottom sheet
 const PostCard = React.memo(({ post, onPress, isDark }) => {
@@ -140,7 +122,9 @@ const PostMarker = React.memo(({ post }) => {
 export default function ExploreMap({ navigation }) {
   const { user } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
+  const mapTheme = useMapSettingsStore((state) => state.mapTheme);
   const { currentLocation } = useLocationStore();
+  const mapConfig = useMemo(() => getMapViewConfig(mapTheme), [mapTheme]);
 
   // Check/request location permissions
   const locationPermission = useLocationPermission();
@@ -329,13 +313,15 @@ export default function ExploreMap({ navigation }) {
     <SafeAreaView style={[styles.container, isDark && styles.containerDark]} edges={['top']}>
       {/* Google Maps */}
       <MapView
+        key={mapTheme}
         ref={mapRef}
         style={styles.map}
         initialRegion={region}
+        mapType={mapConfig.mapType}
         showsUserLocation={hasLocationPermission}
         showsMyLocationButton={false}
         showsCompass={false}
-        customMapStyle={isDark ? darkMapStyle : []}
+        customMapStyle={mapConfig.customMapStyle}
         mapPadding={{ top: 70, right: 16, bottom: BOTTOM_SHEET_MIN + 80, left: 16 }}
       >
         {filteredPosts.map((post) => (

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -58,7 +58,8 @@ const getHtmlContent = (isDark) => {
         .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
         .stagger-reveal { animation: staggerReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; transform: translateY(10px); }
         @keyframes staggerReveal { to { opacity: 1; transform: translateY(0); } }
-        .no-spin { animation: none !important; }
+        .css-spinner { width: 2rem; height: 2rem; border: 2px solid rgba(70, 72, 212, 0.2); border-top-color: #4648d4; border-radius: 50%; animation: cssSpin 0.7s linear infinite; }
+        @keyframes cssSpin { to { transform: rotate(360deg); } }
         .break-words { overflow-wrap: break-word; word-break: break-word; }
     </style>
 </head>
@@ -66,7 +67,7 @@ const getHtmlContent = (isDark) => {
 <!-- Top Bar -->
 <header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
 <div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-[28px] no-spin" style="font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;">public</span>
+<span class="material-symbols-outlined text-primary text-[28px]" style="font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;">public</span>
 <span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
 </div>
 <div class="flex items-center gap-3">
@@ -77,15 +78,17 @@ const getHtmlContent = (isDark) => {
 </header>
 
 <main id="profileContent" class="mt-20 px-margin-page max-w-2xl mx-auto space-y-6">
-    <div class="flex flex-col items-center py-16 gap-3">
-        <span class="material-symbols-outlined text-primary animate-spin text-3xl">progress_activity</span>
-        <p class="text-muted-zinc">Loading profile...</p>
+    <div id="profileLoading" class="flex flex-col items-center py-16 gap-3">
+        <div class="css-spinner" aria-hidden="true"></div>
+        <p class="text-muted-zinc text-sm">Loading profile...</p>
     </div>
 </main>
 
 <script>
         function renderProfile(profile) {
             const container = document.getElementById('profileContent');
+            const loading = document.getElementById('profileLoading');
+            if (loading) loading.remove();
             const name = profile.displayName || 'Explorer';
             const email = profile.email || '';
             const bio = profile.bio || 'GeoConnect Explorer';
@@ -103,22 +106,22 @@ const getHtmlContent = (isDark) => {
                     '<p class="text-muted-zinc mt-1 break-words font-medium text-sm">' + email + '</p>' +
                     '<div class="mt-4 flex justify-center"><p class="text-on-surface-variant dark:text-inverse-on-surface/80 max-w-xs break-words px-4 leading-relaxed">' + bio + '</p></div>' +
                 '</section>' +
-                '<section class="stagger-reveal grid grid-cols-4 gap-3 mb-8" style="animation-delay: 0.2s;">' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-xl font-bold font-headline-md text-primary">' + postsCount + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Posts</p>' +
+                '<section class="stagger-reveal grid grid-cols-4 gap-2 mb-8 px-1" style="animation-delay: 0.2s;">' +
+                    '<div class="text-center">' +
+                        '<p class="text-2xl font-bold font-headline-md text-primary leading-none">' + postsCount + '</p>' +
+                        '<p class="text-xs font-bold text-on-surface dark:text-inverse-on-surface mt-1.5">Posts</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-xl font-bold font-headline-md text-primary">' + followers + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Followers</p>' +
+                    '<div class="text-center">' +
+                        '<p class="text-2xl font-bold font-headline-md text-primary leading-none">' + followers + '</p>' +
+                        '<p class="text-xs font-bold text-on-surface dark:text-inverse-on-surface mt-1.5">Followers</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-xl font-bold font-headline-md text-primary">' + following + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Following</p>' +
+                    '<div class="text-center">' +
+                        '<p class="text-2xl font-bold font-headline-md text-primary leading-none">' + following + '</p>' +
+                        '<p class="text-xs font-bold text-on-surface dark:text-inverse-on-surface mt-1.5">Following</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl py-4 px-2 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
-                        '<p class="text-xl font-bold font-headline-md text-tertiary">' + checkinsCount + '</p>' +
-                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-widest mt-1.5">Check-ins</p>' +
+                    '<div class="text-center">' +
+                        '<p class="text-2xl font-bold font-headline-md text-tertiary leading-none">' + checkinsCount + '</p>' +
+                        '<p class="text-xs font-bold text-on-surface dark:text-inverse-on-surface mt-1.5">Check-ins</p>' +
                     '</div>' +
                 '</section>' +
                 '<section class="stagger-reveal" style="animation-delay: 0.3s;">' +
@@ -143,11 +146,7 @@ const getHtmlContent = (isDark) => {
             }).join('');
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'loadProfile' }));
-            }, 300);
-        });
+        // Profile data is injected from React Native once ready
     </script>
 </body></html>`;
 };
@@ -156,6 +155,8 @@ export default function Profile({ navigation }) {
   const { user } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
   const webViewRef = useRef(null);
+  const webViewReadyRef = useRef(false);
+  const [cachedData, setCachedData] = useState(null);
 
   useEffect(() => {
     webViewRef.current?.injectJavaScript(`
@@ -164,67 +165,99 @@ export default function Profile({ navigation }) {
     `);
   }, [isDark]);
 
+  const injectProfileData = useCallback((profileData, posts) => {
+    if (!webViewRef.current) return;
+    webViewRef.current.injectJavaScript(`renderProfile(${JSON.stringify(profileData)}); true;`);
+    webViewRef.current.injectJavaScript(`renderUserPosts(${JSON.stringify(posts)}); true;`);
+  }, []);
+
+  const showProfileError = useCallback((message) => {
+    webViewRef.current?.injectJavaScript(`
+      document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">error</span><p class="text-muted-zinc text-center px-4">${message}</p></div>';
+      true;
+    `);
+  }, []);
+
+  const fetchProfileData = useCallback(async () => {
+    if (!user) {
+      webViewRef.current?.injectJavaScript(`
+        document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">person_off</span><p class="text-muted-zinc">Please log in to view your profile</p></div>';
+        true;
+      `);
+      return null;
+    }
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Profile loading timeout')), 15000);
+    });
+
+    const [profile, posts, checkins] = await Promise.race([
+      Promise.all([
+        getUserProfile(user.uid),
+        getUserPosts(user.uid, 30),
+        getUserCheckins(user.uid),
+      ]),
+      timeoutPromise,
+    ]);
+
+    const profileData = {
+      displayName: user.displayName || profile?.displayName || 'Explorer',
+      email: user.email || '',
+      bio: profile?.bio || 'GeoConnect Explorer ✨',
+      photoURL: user.photoURL || profile?.photoURL || '',
+      followersCount: profile?.followersCount || 0,
+      followingCount: profile?.followingCount || 0,
+      postsCount: posts.length,
+      checkinsCount: checkins.length,
+    };
+
+    return { profileData, posts };
+  }, [user]);
+
+  // Prefetch profile data as soon as the screen mounts
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const result = await fetchProfileData();
+        if (cancelled || !result) return;
+
+        setCachedData(result);
+        if (webViewReadyRef.current) {
+          injectProfileData(result.profileData, result.posts);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[Profile] Error loading profile data:', error);
+
+        if (!webViewReadyRef.current) return;
+
+        const message =
+          error.message === 'Profile loading timeout'
+            ? 'Loading timed out. Please check your connection and try again.'
+            : 'Failed to load profile. Please check your connection and try again.';
+        showProfileError(message);
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [fetchProfileData, injectProfileData, showProfileError]);
+
+  const handleWebViewLoadEnd = useCallback(() => {
+    webViewReadyRef.current = true;
+
+    if (cachedData) {
+      injectProfileData(cachedData.profileData, cachedData.posts);
+    }
+  }, [cachedData, injectProfileData]);
+
   const handleMessage = async (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
 
-      if (data.action === 'loadProfile') {
-        if (!user) {
-          webViewRef.current?.injectJavaScript(`
-            document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">person_off</span><p class="text-muted-zinc">Please log in to view your profile</p></div>';
-            true;
-          `);
-          return;
-        }
-
-        // Create a promise that rejects after 15 seconds
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Profile loading timeout')), 15000);
-        });
-
-        try {
-          // Race the profile loading against the timeout
-          await Promise.race([
-            (async () => {
-              const [profile, posts, checkins] = await Promise.all([
-                getUserProfile(user.uid),
-                getUserPosts(user.uid, 30),
-                getUserCheckins(user.uid)
-              ]);
-
-              const profileData = {
-                displayName: user.displayName || profile?.displayName || 'Explorer',
-                email: user.email || '',
-                bio: profile?.bio || 'GeoConnect Explorer ✨',
-                photoURL: user.photoURL || profile?.photoURL || '',
-                followersCount: profile?.followersCount || 0,
-                followingCount: profile?.followingCount || 0,
-                postsCount: posts.length,
-                checkinsCount: checkins.length,
-              };
-
-              webViewRef.current?.injectJavaScript(`renderProfile(${JSON.stringify(profileData)}); true;`);
-              webViewRef.current?.injectJavaScript(`renderUserPosts(${JSON.stringify(posts)}); true;`);
-            })(),
-            timeoutPromise
-          ]);
-        } catch (error) {
-          console.error('[Profile] Error loading profile data:', error);
-          webViewRef.current?.injectJavaScript(`
-            document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">error</span><p class="text-muted-zinc">Failed to load profile. Please check your connection and try again.</p></div>';
-            true;
-          `);
-
-          if (error.message === 'Profile loading timeout') {
-            // Show timeout-specific message
-            webViewRef.current?.injectJavaScript(`
-              document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">hourglass_empty</span><p class="text-muted-zinc">Loading timed out. Please check your connection and try again.</p></div>';
-              true;
-            `);
-          }
-        }
-      }
-      else if (data.action === 'openSettings') {
+      if (data.action === 'openSettings') {
         navigation.navigate('Settings');
       }
       else if (data.action === 'openPost') {
@@ -246,6 +279,7 @@ export default function Profile({ navigation }) {
         allowFileAccessFromFileURLs={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onLoadEnd={handleWebViewLoadEnd}
         onMessage={handleMessage}
       />
     </SafeAreaView>

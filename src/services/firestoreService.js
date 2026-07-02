@@ -73,6 +73,46 @@ export const updateUserProfile = async (userId, updates) => {
 };
 
 // =============================================
+// ===== Security Settings =====
+// =============================================
+
+const DEFAULT_SECURITY_SETTINGS = {
+  twoFactorEnabled: false,
+  loginAlerts: true,
+};
+
+/**
+ * Get security settings for a user.
+ * @param {string} userId
+ * @returns {Object} { twoFactorEnabled, loginAlerts }
+ */
+export const getSecuritySettings = async (userId) => {
+  try {
+    const userDoc = await getDoc(doc(firestore, "users", userId));
+    return userDoc.data()?.securitySettings || DEFAULT_SECURITY_SETTINGS;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Update security settings for a user.
+ * @param {string} userId
+ * @param {Object} settings - { twoFactorEnabled, loginAlerts }
+ */
+export const updateSecuritySettings = async (userId, settings) => {
+  try {
+    await setDoc(
+      doc(firestore, "users", userId),
+      { securitySettings: settings },
+      { merge: true },
+    );
+  } catch (error) {
+    throw error;
+  }
+};
+
+// =============================================
 // ===== Location Privacy Settings =====
 // =============================================
 

@@ -149,8 +149,12 @@ const getHtmlContent = (isDark) => {
 </div>
 <!-- Post List -->
 <div id="feedContainer" class="space-y-6">
-    <div class="flex flex-col items-center py-16 gap-3">
-        <span class="material-symbols-outlined text-primary animate-spin text-3xl">progress_activity</span>
+    <div class="flex flex-col items-center py-16 gap-4">
+        <div class="flex gap-1.5">
+            <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0s;"></div>
+            <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0.15s;"></div>
+            <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0.3s;"></div>
+        </div>
         <p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest">Loading feed...</p>
     </div>
 </div>

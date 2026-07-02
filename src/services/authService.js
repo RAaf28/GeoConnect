@@ -4,6 +4,9 @@ import {
   signOut,
   signInWithPopup,
   GoogleAuthProvider,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
   onAuthStateChanged,
   updateProfile,
   sendPasswordResetEmail,
@@ -97,4 +100,34 @@ export const sendPasswordReset = async (email) => {
   } catch (error) {
     throw error;
   }
+};
+
+// Change password for email/password accounts (requires current password)
+export const changePassword = async (currentPassword, newPassword) => {
+  const user = auth.currentUser;
+  if (!user?.email) throw new Error("No email user logged in");
+
+  const credential = EmailAuthProvider.credential(user.email, currentPassword);
+  await reauthenticateWithCredential(user, credential);
+  await updatePassword(user, newPassword);
+};
+
+// Get sign-in info for the security screen
+export const getAuthSecurityInfo = () => {
+  const user = auth.currentUser;
+  if (!user) return null;
+
+  const providers = user.providerData.map((p) => p.providerId);
+  const hasPassword = providers.includes("password");
+  const hasGoogle = providers.includes("google.com");
+
+  return {
+    email: user.email,
+    emailVerified: user.emailVerified,
+    providers,
+    hasPassword,
+    hasGoogle,
+    createdAt: user.metadata.creationTime,
+    lastSignIn: user.metadata.lastSignInTime,
+  };
 };

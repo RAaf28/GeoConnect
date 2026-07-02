@@ -129,6 +129,21 @@ export const usePrivacyStore = create(
   ),
 );
 
+// ===== Map Settings Store =====
+export const useMapSettingsStore = create(
+  persist(
+    (set) => ({
+      mapTheme: 'standard',
+
+      setMapTheme: (mapTheme) => set({ mapTheme }),
+    }),
+    {
+      name: 'map-settings-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    },
+  ),
+);
+
 // ===== Notification Store =====
 export const useNotificationStore = create((set) => ({
   notifications: [],

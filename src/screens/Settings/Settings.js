@@ -3,7 +3,8 @@ import { StyleSheet, View, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../hooks/useAuth';
-import { useThemeStore } from '../../store/stores';
+import { useThemeStore, useMapSettingsStore } from '../../store/stores';
+import { MAP_THEME_LABELS } from '../../utils/mapTheme';
 import { logOut } from '../../services/authService';
 
 const getHtmlContent = (user) => {
@@ -142,22 +143,17 @@ const getHtmlContent = (user) => {
   </head>
 <body class="bg-background text-on-background font-body-md min-h-screen pb-4">
 <!-- TopAppBar -->
-<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-md shadow-sm h-16 flex items-center px-margin-page">
 <div class="flex items-center gap-3">
 <button class="p-2 -ml-2 rounded-full hover:bg-surface-variant/50 transition-colors" onclick="window.ReactNativeWebView.postMessage('goBack')">
 <span class="material-symbols-outlined text-primary">arrow_back</span>
 </button>
 <h1 class="text-headline-md font-headline-md text-primary tracking-tight">Settings</h1>
 </div>
-<div class="flex items-center">
-<button class="p-2 rounded-full hover:bg-surface-variant/50 transition-colors">
-<span class="material-symbols-outlined text-on-surface-variant">search</span>
-</button>
-</div>
 </header>
 <main class="mt-20 px-margin-page max-w-2xl mx-auto space-y-6">
 <!-- Profile Anchor Card -->
-<section class="staggered-entry bg-surface-pure rounded-xl p-4 whisper-shadow flex items-center gap-4">
+<section id="profileSection" class="staggered-entry bg-surface-pure rounded-xl p-4 whisper-shadow flex items-center gap-4 settings-search-item" data-search="profile edit account ${displayName} ${email}">
 <div class="relative w-16 h-16 rounded-full overflow-hidden border-2 border-primary-fixed-dim">
 <img alt="User Profile" class="w-full h-full object-cover" src="${user?.photoURL || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(displayName) + '&background=4648d4&color=fff&size=128'}"/>
 </div>
@@ -173,10 +169,10 @@ const getHtmlContent = (user) => {
 </button>
 </section>
 <!-- Account Section -->
-<div class="staggered-entry delay-1">
+<div class="staggered-entry delay-1 settings-section">
 <h3 class="text-technical-label font-technical-label text-muted-zinc mb-3 px-1 uppercase tracking-widest">Account</h3>
 <div class="bg-surface-pure rounded-xl whisper-shadow divide-y divide-soft-border overflow-hidden">
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigatePersonalInformation')">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group settings-search-item" data-search="personal information phone address legal name" onclick="window.ReactNativeWebView.postMessage('navigatePersonalInformation')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
 <span class="material-symbols-outlined">person</span>
@@ -188,7 +184,7 @@ const getHtmlContent = (user) => {
 </div>
 <span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
 </div>
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigateLoginSecurity')">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group settings-search-item" data-search="login security password 2fa two factor authentication" onclick="window.ReactNativeWebView.postMessage('navigateLoginSecurity')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
 <span class="material-symbols-outlined">shield</span>
@@ -200,7 +196,7 @@ const getHtmlContent = (user) => {
 </div>
 <span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
 </div>
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('openPrivacySettings')">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group settings-search-item" data-search="privacy settings data location history invisible" onclick="window.ReactNativeWebView.postMessage('openPrivacySettings')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
 <span class="material-symbols-outlined">lock</span>
@@ -215,10 +211,10 @@ const getHtmlContent = (user) => {
 </div>
 </div>
 <!-- Preferences Section -->
-<div class="staggered-entry delay-2">
+<div class="staggered-entry delay-2 settings-section">
 <h3 class="text-technical-label font-technical-label text-muted-zinc mb-3 px-1 uppercase tracking-widest">Preferences</h3>
 <div class="bg-surface-pure rounded-xl whisper-shadow divide-y divide-soft-border overflow-hidden">
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group" onclick="window.ReactNativeWebView.postMessage('navigateNotifications')">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group settings-search-item" data-search="push notifications alerts nearby map activity" onclick="window.ReactNativeWebView.postMessage('navigateNotifications')">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-tertiary-fixed/30 flex items-center justify-center text-tertiary">
 <span class="material-symbols-outlined">notifications_active</span>
@@ -233,7 +229,7 @@ const getHtmlContent = (user) => {
 <div class="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
 </label>
 </div>
-<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors group">
+<div class="p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors group settings-search-item" data-search="location tracking precise discovery mode gps">
 <div class="flex items-center gap-4">
 <div class="w-10 h-10 rounded-lg bg-tertiary-fixed/30 flex items-center justify-center text-tertiary">
 <span class="material-symbols-outlined">location_on</span>
@@ -251,9 +247,9 @@ const getHtmlContent = (user) => {
 </div>
 </div>
 <!-- Geo Discovery Section -->
-<div class="staggered-entry delay-3">
+<div class="staggered-entry delay-3 settings-section">
 <h3 class="text-technical-label font-technical-label text-muted-zinc mb-3 px-1 uppercase tracking-widest">Discovery</h3>
-<div class="bg-surface-pure rounded-xl whisper-shadow p-6">
+<div class="bg-surface-pure rounded-xl whisper-shadow p-6 settings-search-item" data-search="discovery search radius map theme standard terrain satellite dark mode">
 <div class="flex justify-between items-center mb-6">
 <p class="font-bold text-on-surface">Search Radius</p>
 <span class="text-technical-label font-technical-label text-primary bg-primary-fixed px-2 py-1 rounded-md">25 km</span>
@@ -263,22 +259,29 @@ const getHtmlContent = (user) => {
 <span>5 km</span>
 <span>100 km</span>
 </div>
-<div class="mt-8 grid grid-cols-2 gap-3">
-<div class="p-4 rounded-xl border border-soft-border border-primary/30 transition-colors group cursor-pointer" onclick="openMapThemeModal()">
-<span class="material-symbols-outlined text-primary mb-2">map</span>
-<p class="font-bold text-[14px]">Map Theme</p>
-<p id="currentMapTheme" class="text-[12px] text-on-surface-variant">Standard</p>
+<div class="mt-6 pt-5 border-t border-soft-border settings-search-item" data-search="map theme standard terrain satellite dark mode">
+<button type="button" class="w-full p-4 flex items-center justify-between hover:bg-surface-container-low transition-colors cursor-pointer group rounded-xl" onclick="openMapThemeModal()">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">map</span>
 </div>
-<div class="p-4 rounded-xl border border-soft-border hover:border-primary/30 transition-colors group cursor-pointer" onclick="openOverlaysModal()">
-<span class="material-symbols-outlined text-primary mb-2">layers</span>
-<p class="font-bold text-[14px]">Overlays</p>
-<p id="currentOverlay" class="text-[12px] text-on-surface-variant">None</p>
-</div>
+<div class="text-left">
+<p class="font-bold text-on-surface">Map Theme</p>
+<p id="currentMapTheme" class="text-on-surface-variant text-[12px]">Standard</p>
 </div>
 </div>
+<span class="material-symbols-outlined text-outline-variant group-hover:translate-x-1 transition-transform">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<div id="noSearchResults" class="hidden text-center py-12">
+<span class="material-symbols-outlined text-4xl text-muted-zinc mb-2">search_off</span>
+<p class="text-muted-zinc font-medium">No settings found</p>
+<p class="text-on-surface-variant text-sm mt-1">Try a different keyword</p>
 </div>
 <!-- Logout Action -->
-<div class="staggered-entry delay-4 pt-4">
+<div id="logoutSection" class="staggered-entry delay-4 pt-4 settings-search-item" data-search="logout sign out exit ${displayName}">
 <button onclick="window.ReactNativeWebView.postMessage('performLogout')" class="w-full bg-surface-container-high text-error font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-error-container/20 transition-all group active:scale-[0.98]">
 <span class="material-symbols-outlined transition-transform group-hover:rotate-12">logout</span>
                 Logout ${displayName}
@@ -295,67 +298,27 @@ const getHtmlContent = (user) => {
 <h3 class="font-bold text-lg text-on-surface mb-4">Map Theme</h3>
 <div class="space-y-2" id="mapThemeOptions">
 <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<input type="radio" name="mapTheme" value="standard" class="accent-primary w-4 h-4" onchange="selectMapTheme('Standard')" checked/>
+<input type="radio" name="mapTheme" value="standard" class="accent-primary w-4 h-4" onchange="selectMapTheme('standard', 'Standard')"/>
 <span class="material-symbols-outlined text-primary">map</span>
 <span class="font-bold">Standard</span>
 </label>
 <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<input type="radio" name="mapTheme" value="terrain" class="accent-primary w-4 h-4" onchange="selectMapTheme('Terrain')"/>
+<input type="radio" name="mapTheme" value="terrain" class="accent-primary w-4 h-4" onchange="selectMapTheme('terrain', 'Terrain')"/>
 <span class="material-symbols-outlined text-primary">terrain</span>
 <span class="font-bold">Terrain</span>
 </label>
 <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<input type="radio" name="mapTheme" value="satellite" class="accent-primary w-4 h-4" onchange="selectMapTheme('Satellite')"/>
+<input type="radio" name="mapTheme" value="satellite" class="accent-primary w-4 h-4" onchange="selectMapTheme('satellite', 'Satellite')"/>
 <span class="material-symbols-outlined text-primary">satellite_alt</span>
 <span class="font-bold">Satellite</span>
 </label>
 <label class="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<input type="radio" name="mapTheme" value="dark" class="accent-primary w-4 h-4" onchange="selectMapTheme('Dark Mode')"/>
+<input type="radio" name="mapTheme" value="dark" class="accent-primary w-4 h-4" onchange="selectMapTheme('dark', 'Dark Mode')"/>
 <span class="material-symbols-outlined text-primary">dark_mode</span>
 <span class="font-bold">Dark Mode</span>
 </label>
 </div>
 <button onclick="closeMapThemeModal()" class="w-full mt-4 py-3 bg-primary text-on-primary font-bold rounded-xl">Done</button>
-</div>
-</div>
-
-<!-- Overlays Modal -->
-<div id="overlaysModal" class="fixed inset-0 z-[100] flex items-end justify-center" style="display:none;">
-<div class="absolute inset-0 bg-black/40" onclick="closeOverlaysModal()"></div>
-<div class="relative w-full max-w-2xl bg-surface-pure rounded-t-2xl p-6 shadow-2xl" style="animation: slideUp 0.3s ease-out;">
-<div class="w-12 h-1 bg-outline-variant rounded-full mx-auto mb-4"></div>
-<h3 class="font-bold text-lg text-on-surface mb-4">Map Overlays</h3>
-<div class="space-y-2" id="overlayOptions">
-<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary">whatshot</span>
-<span class="font-bold">Social Heatmap</span>
-</div>
-<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
-</label>
-<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary">traffic</span>
-<span class="font-bold">Traffic</span>
-</div>
-<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
-</label>
-<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary">place</span>
-<span class="font-bold">Points of Interest</span>
-</div>
-<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
-</label>
-<label class="flex items-center justify-between p-3 rounded-xl hover:bg-surface-container-low transition-colors cursor-pointer">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary">event</span>
-<span class="font-bold">Events</span>
-</div>
-<input type="checkbox" class="accent-primary w-4 h-4" onchange="updateOverlayLabel()"/>
-</label>
-</div>
-<button onclick="closeOverlaysModal()" class="w-full mt-4 py-3 bg-primary text-on-primary font-bold rounded-xl">Done</button>
 </div>
 </div>
 
@@ -367,6 +330,56 @@ to { transform: translateY(0); }
 </style>
 
 <script>
+        let settingsSearchActive = false;
+
+        function toggleSettingsSearch(force) {
+            settingsSearchActive = typeof force === 'boolean' ? force : !settingsSearchActive;
+            const title = document.getElementById('headerTitle');
+            const searchBar = document.getElementById('headerSearchBar');
+            const searchIcon = document.getElementById('searchToggleIcon');
+            const input = document.getElementById('settingsSearchInput');
+
+            if (settingsSearchActive) {
+                title.classList.add('hidden');
+                searchBar.classList.remove('hidden');
+                searchIcon.textContent = 'close';
+                setTimeout(function() { input.focus(); }, 100);
+            } else {
+                title.classList.remove('hidden');
+                searchBar.classList.add('hidden');
+                searchIcon.textContent = 'search';
+                input.value = '';
+                filterSettings('');
+            }
+        }
+
+        function filterSettings(query) {
+            const q = query.trim().toLowerCase();
+            const items = document.querySelectorAll('.settings-search-item');
+            const sections = document.querySelectorAll('.settings-section');
+            let visibleCount = 0;
+
+            items.forEach(function(item) {
+                const text = (item.getAttribute('data-search') || item.textContent || '').toLowerCase();
+                const match = !q || text.indexOf(q) !== -1;
+                item.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+
+            sections.forEach(function(section) {
+                const sectionItems = section.querySelectorAll('.settings-search-item');
+                const hasVisible = Array.from(sectionItems).some(function(el) {
+                    return el.style.display !== 'none';
+                });
+                section.style.display = !q || hasVisible ? '' : 'none';
+            });
+
+            const noResults = document.getElementById('noSearchResults');
+            if (noResults) {
+                noResults.classList.toggle('hidden', !q || visibleCount > 0);
+            }
+        }
+
         // Map Theme Modal
         function openMapThemeModal() {
             document.getElementById('mapThemeModal').style.display = 'flex';
@@ -374,28 +387,15 @@ to { transform: translateY(0); }
         function closeMapThemeModal() {
             document.getElementById('mapThemeModal').style.display = 'none';
         }
-        function selectMapTheme(themeName) {
-            document.getElementById('currentMapTheme').textContent = themeName;
-            window.ReactNativeWebView.postMessage(JSON.stringify({action: 'setMapTheme', theme: themeName}));
+        function selectMapTheme(themeKey, themeLabel) {
+            document.getElementById('currentMapTheme').textContent = themeLabel;
+            window.ReactNativeWebView.postMessage(JSON.stringify({action: 'setMapTheme', theme: themeKey}));
         }
 
-        // Overlays Modal
-        function openOverlaysModal() {
-            document.getElementById('overlaysModal').style.display = 'flex';
-        }
-        function closeOverlaysModal() {
-            document.getElementById('overlaysModal').style.display = 'none';
-        }
-        function updateOverlayLabel() {
-            var checkboxes = document.querySelectorAll('#overlayOptions input[type=checkbox]:checked');
-            var labels = [];
-            checkboxes.forEach(function(cb) {
-                var label = cb.closest('label').querySelector('.font-bold').textContent;
-                labels.push(label);
-            });
-            var display = labels.length > 0 ? labels.join(', ') : 'None';
-            document.getElementById('currentOverlay').textContent = display;
-            window.ReactNativeWebView.postMessage(JSON.stringify({action: 'setOverlays', overlays: labels}));
+        function applyMapTheme(themeKey, themeLabel) {
+            document.getElementById('currentMapTheme').textContent = themeLabel;
+            const radio = document.querySelector('input[name="mapTheme"][value="' + themeKey + '"]');
+            if (radio) radio.checked = true;
         }
 
         // Micro-interactions for tactile feedback
@@ -427,6 +427,8 @@ export default function Settings({ navigation }) {
   const { user } = useAuth();
   const webViewRef = useRef(null);
   const isDark = useThemeStore((state) => state.isDark);
+  const mapTheme = useMapSettingsStore((state) => state.mapTheme);
+  const setMapTheme = useMapSettingsStore((state) => state.setMapTheme);
 
   useEffect(() => {
     webViewRef.current?.injectJavaScript(`
@@ -434,6 +436,22 @@ export default function Settings({ navigation }) {
       true;
     `);
   }, [isDark]);
+
+  useEffect(() => {
+    const label = MAP_THEME_LABELS[mapTheme] || MAP_THEME_LABELS.standard;
+    webViewRef.current?.injectJavaScript(`
+      applyMapTheme(${JSON.stringify(mapTheme)}, ${JSON.stringify(label)});
+      true;
+    `);
+  }, [mapTheme]);
+
+  const handleWebViewLoadEnd = () => {
+    const label = MAP_THEME_LABELS[mapTheme] || MAP_THEME_LABELS.standard;
+    webViewRef.current?.injectJavaScript(`
+      applyMapTheme(${JSON.stringify(mapTheme)}, ${JSON.stringify(label)});
+      true;
+    `);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -446,6 +464,7 @@ export default function Settings({ navigation }) {
         allowFileAccessFromFileURLs={true}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onLoadEnd={handleWebViewLoadEnd}
         onMessage={async (event) => {
           try {
             // First check if it's a JSON string
@@ -469,18 +488,16 @@ export default function Settings({ navigation }) {
             } else if (action === 'navigatePersonalInformation') {
               navigation.navigate('PersonalInformation');
             } else if (action === 'navigateLoginSecurity') {
-              Alert.alert('Coming Soon', 'Login & Security features are currently under development.');
+              navigation.navigate('LoginSecurity');
             } else if (action === 'navigateNotifications') {
               navigation.navigate('Notifications');
             } else if (action === 'toggleLocation') {
                // Location toggle logic can be handled here or passed to a store
                console.log('Location tracking toggled:', data.enabled);
             } else if (action === 'setMapTheme') {
-               console.log('Map theme set to:', data.theme);
-               // In a real app, you would save this to a store or AsyncStorage
-            } else if (action === 'setOverlays') {
-               console.log('Overlays set to:', data.overlays);
-               // In a real app, you would save this to a store or AsyncStorage
+              if (data.theme && MAP_THEME_LABELS[data.theme]) {
+                setMapTheme(data.theme);
+              }
             } else if (action === 'performLogout') {
               try {
                 await logOut();

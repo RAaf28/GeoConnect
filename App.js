@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
 
 import { useAuth } from "./src/hooks/useAuth";
 import { useThemeStore } from "./src/store/stores";
@@ -30,6 +31,7 @@ import RegisterScreen from "./src/screens/Register/Register";
 import ForgotPasswordScreen from "./src/screens/ForgotPassword/ForgotPassword";
 import EditProfileScreen from "./src/screens/EditProfile/EditProfile";
 import PersonalInformationScreen from "./src/screens/PersonalInformation/PersonalInformation";
+import LoginSecurityScreen from "./src/screens/LoginSecurity/LoginSecurity";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -58,34 +60,37 @@ const CustomTabBarButton = ({ navigation }) => (
       width: 60,
       height: 60,
       borderRadius: 30,
-      backgroundColor: "#4648d4", // Primary color
+      backgroundColor: "#4648d4",
       borderWidth: 4,
-      borderColor: "#fcf8ff", // Background color
+      borderColor: "#fcf8ff",
       shadowColor: "#4648d4",
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.3,
       shadowRadius: 8,
       elevation: 5,
+      justifyContent: "center",
+      alignItems: "center",
     }}>
-      <Text style={{ fontSize: 32, color: "white", textAlign: "center", lineHeight: 52 }}>+</Text>
+      <MaterialIcons name="add" size={32} color="#ffffff" />
     </View>
     <Text style={{ fontSize: 11, fontWeight: "600", color: "#4648d4", marginTop: 4 }}>Post</Text>
   </TouchableOpacity>
 );
 
-// Tab icon component using Unicode/Emoji as simple icons
-const TabIcon = ({ label, focused }) => {
-  const icons = {
-    Feed: "📰",
-    Explore: "🗺️",
-    Alerts: "🔔",
-    Profile: "👤",
-  };
-  return (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.5 }}>
-      {icons[label] || "•"}
-    </Text>
-  );
+// Tab icons using Material Design icons (Android-style)
+const TAB_ICONS = {
+  Feed: { active: "dynamic-feed", inactive: "dynamic-feed" },
+  Explore: { active: "explore", inactive: "explore" },
+  Alerts: { active: "notifications", inactive: "notifications-none" },
+  Profile: { active: "person", inactive: "person-outline" },
+};
+
+const TabIcon = ({ routeName, focused, color }) => {
+  const icons = TAB_ICONS[routeName];
+  if (!icons) return null;
+
+  const iconName = focused ? icons.active : icons.inactive;
+  return <MaterialIcons name={iconName} size={24} color={color} />;
 };
 
 // App Tab Navigator
@@ -93,7 +98,9 @@ const AppTabs = () => (
   <Tab.Navigator
     screenOptions={({ route }) => ({
       headerShown: false,
-      tabBarIcon: ({ focused }) => <TabIcon label={route.name} focused={focused} />,
+      tabBarIcon: ({ focused, color }) => (
+        <TabIcon routeName={route.name} focused={focused} color={color} />
+      ),
       tabBarActiveTintColor: "#4648d4",
       tabBarInactiveTintColor: "#64748B",
       tabBarStyle: {
@@ -210,6 +217,11 @@ const AppStack = () => (
     <Stack.Screen
       name="PersonalInformation"
       component={PersonalInformationScreen}
+      options={{ animation: "slide_from_right", headerShown: false }}
+    />
+    <Stack.Screen
+      name="LoginSecurity"
+      component={LoginSecurityScreen}
       options={{ animation: "slide_from_right", headerShown: false }}
     />
     <Stack.Screen

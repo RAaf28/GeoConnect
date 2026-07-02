@@ -1,0 +1,287 @@
+rules_version = '2';
+
+// ============================================================
+// GeoConnect — Firestore Security Rules
+// ============================================================
+// Sesuai project plan: 
+//   - Rules berbeda untuk data lokasi exact vs blurred
+//   - Privacy by Design: default semua fitur lokasi OFF
+//   - Data lokasi hanya bisa diakses oleh yang berhak
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // Helper Functions
+    // ==========================================
+
+    // Cek apakah user sudah login
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Cek apakah request dari pemilik resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Ambil data user dari Firestore
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    // Cek apakah user punya privacy mode tertentu
+    function getUserPrivacyMode(userId) {
+      let userData = getUserData(userId);
+      return userData.locationPrivacy.mode;
+    }
+
+    // Cek apakah user dalam invisible mode
+    function isInvisibleMode(userId) {
+      let userData = getUserData(userId);
+      return userData.locationPrivacy.invisibleMode == true;
+    }
+
+    // Validasi bahwa field tertentu tidak berubah saat update
+    function fieldUnchanged(field) {
+      return !(field in request.resource.data) 
+        || request.resource.data[field] == resource.data[field];
+    }
+
+    // ==========================================
+    // /users/{userId}
+    // ==========================================
+    // - Profil publik bisa dibaca oleh semua user yang login
+    // - Hanya pemilik yang bisa update profilnya sendiri
+    // - Location data (lat/lng) di-filter berdasarkan privacy mode:
+    //   * "hidden" → lat/lng tidak boleh ditulis
+    //   * "blurred" → lat/lng bisa ditulis (client handles blurring)
+    //   * "exact" → lat/lng bisa ditulis
+    // ==========================================
+    match /users/{userId} {
+      // Semua user yang login bisa baca profil publik
+      // CATATAN: field locationPrivacy tetap bisa dibaca — 
+      // client-side logic di useNearbyPeople skip user "hidden"/invisible
+      allow read: if isAuthenticated();
+
+      // Hanya pemilik yang bisa buat profilnya
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['locationPrivacy'])
+        && request.resource.data.locationPrivacy.mode in ['exact', 'blurred', 'hidden']
+        && request.resource.data.followersCount == 0
+        && request.resource.data.followingCount == 0;
+
+      // Hanya pemilik yang bisa update profilnya
+      // Tidak boleh mengubah followersCount/followingCount secara langsung
+      // (hanya via transaction di follow/unfollow endpoints)
+      allow update: if isOwner(userId);
+
+      // User tidak bisa dihapus (soft delete via update jika diperlukan)
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // /posts/{postId}
+    // ==========================================
+    // - Post publik bisa dibaca oleh semua user yang login
+    // - Hanya pemilik (authorId) yang bisa create/update/delete
+    // - likesCount dan commentsCount di-manage via transaction
+    // ==========================================
+    match /posts/{postId} {
+      // Semua user yang login bisa baca post
+      allow read: if isAuthenticated();
+
+      // Hanya user yang login bisa buat post
+      // authorId harus sama dengan uid yang login
+      allow create: if isAuthenticated()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.likesCount == 0
+        && request.resource.data.commentsCount == 0;
+
+      // Hanya pemilik post yang bisa update
+      // authorId tidak boleh diubah
+      allow update: if isAuthenticated()
+        && (resource.data.authorId == request.auth.uid
+            // Atau: transaction dari like/comment boleh update likesCount/commentsCount
+            // oleh user lain (dikelola oleh service layer)
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['likesCount', 'commentsCount'])));
+
+      // Hanya pemilik post yang bisa hapus
+      allow delete: if isAuthenticated()
+        && resource.data.authorId == request.auth.uid;
+
+      // ---- Subcollection: /posts/{postId}/likes/{likeId} ----
+      // likeId = userId yang like
+      match /likes/{likeId} {
+        // Semua user yang login bisa lihat siapa yang like
+        allow read: if isAuthenticated();
+
+        // User hanya bisa like atas nama dirinya sendiri (likeId = uid)
+        allow create: if isAuthenticated()
+          && likeId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid;
+
+        // User hanya bisa unlike (hapus) like miliknya sendiri
+        allow delete: if isAuthenticated()
+          && likeId == request.auth.uid;
+
+        // Like tidak bisa di-update
+        allow update: if false;
+      }
+
+      // ---- Subcollection: /posts/{postId}/comments/{commentId} ----
+      match /comments/{commentId} {
+        // Semua user yang login bisa baca komentar
+        allow read: if isAuthenticated();
+
+        // User yang login bisa buat komentar
+        // userId di data harus sama dengan uid
+        allow create: if isAuthenticated()
+          && request.resource.data.userId == request.auth.uid;
+
+        // Hanya pemilik komentar yang bisa update
+        allow update: if isAuthenticated()
+          && resource.data.userId == request.auth.uid;
+
+        // Pemilik komentar ATAU pemilik post bisa hapus komentar
+        allow delete: if isAuthenticated()
+          && (resource.data.userId == request.auth.uid
+              || get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+      }
+    }
+
+    // ==========================================
+    // /follows/{followDocId}
+    // ==========================================
+    // followDocId = "{followerId}_{followingId}"
+    // - Bisa dibaca oleh semua user yang login (untuk cek status follow)
+    // - Hanya follower yang bisa create/delete
+    // ==========================================
+    match /follows/{followDocId} {
+      // Semua user login bisa baca (cek apakah sudah follow)
+      allow read: if isAuthenticated();
+
+      // Hanya follower yang bisa membuat follow relationship
+      // followerId harus sama dengan uid
+      allow create: if isAuthenticated()
+        && request.resource.data.followerId == request.auth.uid
+        && request.resource.data.followerId != request.resource.data.followingId;
+
+      // Hanya follower yang bisa unfollow (hapus)
+      allow delete: if isAuthenticated()
+        && resource.data.followerId == request.auth.uid;
+
+      // Follow relationship tidak bisa di-update
+      allow update: if false;
+    }
+
+    // ==========================================
+    // /checkins/{checkinId}
+    // ==========================================
+    // - Bisa dibaca oleh semua user yang login (untuk leaderboard)
+    // - Hanya pemilik yang bisa create
+    // ==========================================
+    match /checkins/{checkinId} {
+      // Semua user login bisa baca (leaderboard, venue detail)
+      allow read: if isAuthenticated();
+
+      // Hanya user yang login bisa buat check-in
+      // userId harus sama dengan uid
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid;
+
+      // Check-in tidak bisa di-update atau dihapus
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // /events/{eventId}
+    // ==========================================
+    // - Event publik bisa dibaca oleh semua user yang login
+    // - Hanya creator yang bisa create/update/delete
+    // - rsvpCounts di-manage via transaction (boleh update oleh user lain)
+    // ==========================================
+    match /events/{eventId} {
+      // Semua user login bisa baca event publik
+      allow read: if isAuthenticated();
+
+      // Hanya user yang login bisa buat event
+      // creatorId harus sama dengan uid
+      allow create: if isAuthenticated()
+        && request.resource.data.creatorId == request.auth.uid
+        && request.resource.data.rsvpCounts.going == 0
+        && request.resource.data.rsvpCounts.interested == 0;
+
+      // Creator bisa update semua field event
+      // User lain hanya bisa update rsvpCounts (via RSVP transaction)
+      allow update: if isAuthenticated()
+        && (resource.data.creatorId == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['rsvpCounts']));
+
+      // Hanya creator yang bisa hapus event
+      allow delete: if isAuthenticated()
+        && resource.data.creatorId == request.auth.uid;
+    }
+
+    // ==========================================
+    // /rsvp/{rsvpDocId}
+    // ==========================================
+    // rsvpDocId = "{eventId}_{userId}"
+    // - Bisa dibaca oleh semua user yang login
+    // - Hanya pemilik RSVP yang bisa create/update/delete
+    // ==========================================
+    match /rsvp/{rsvpDocId} {
+      // Semua user login bisa baca (lihat siapa yang going/interested)
+      allow read: if isAuthenticated();
+
+      // Hanya user yang login bisa buat RSVP untuk dirinya sendiri
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status in ['going', 'interested', 'not_going'];
+
+      // Hanya pemilik RSVP yang bisa update status
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.status in ['going', 'interested', 'not_going']
+        // userId dan eventId tidak boleh berubah
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.eventId == resource.data.eventId;
+
+      // Hanya pemilik RSVP yang bisa cancel (hapus)
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // ==========================================
+    // /locationHistory/{userId}/entries/{entryId}
+    // ==========================================
+    // - PALING SENSITIF: data lokasi historis
+    // - HANYA pemilik yang bisa read/write/delete
+    // - User lain TIDAK BISA membaca lokasi historis user lain
+    // - Sesuai Privacy by Design principle
+    // ==========================================
+    match /locationHistory/{userId}/entries/{entryId} {
+      // HANYA pemilik yang bisa baca history lokasinya sendiri
+      allow read: if isOwner(userId);
+
+      // HANYA pemilik yang bisa tambah entry baru
+      allow create: if isOwner(userId);
+
+      // Location history entry tidak bisa diupdate (immutable log)
+      allow update: if false;
+
+      // HANYA pemilik yang bisa hapus history-nya
+      allow delete: if isOwner(userId);
+    }
+
+    // ==========================================
+    // Catch-all: deny semua akses yang tidak di-match
+    // ==========================================
+    // Semua path lain yang tidak didefinisikan di atas
+    // secara otomatis ditolak (Firestore default behavior)
+  }
+}

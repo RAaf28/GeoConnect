@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "GeoConnect",
+    "slug": "geoconnect",
+    "version": "1.0.0",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.geoconnect.app",
+      "config": {}
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.geoconnect.app",
+      "config": {},
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "INTERNET",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow GeoConnect to access your location."
+        }
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "97380260-627e-4713-aecd-0fcf6e9d1321"
+      }
+    }
+  }
+}

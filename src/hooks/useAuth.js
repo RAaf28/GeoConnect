@@ -7,14 +7,14 @@ export const useAuth = () => {
   const { user, loading, setUser, setLoading, setError } = useAuthStore();
 
   useEffect(() => {
-    console.log("[useAuth] Hook mounted, listening to auth changes...");
+    if (__DEV__) console.log("[useAuth] Hook mounted, listening to auth changes...");
     const unsubscribe = onAuthChange(async (authUser) => {
-      console.log("[useAuth] onAuthChange event fired. authUser:", authUser ? authUser.uid : "null");
+      if (__DEV__) console.log("[useAuth] onAuthChange event fired. authUser:", authUser ? authUser.uid : "null");
       if (authUser) {
         try {
-          console.log("[useAuth] Fetching user profile from Firestore...");
+          if (__DEV__) console.log("[useAuth] Fetching user profile from Firestore...");
           const profile = await getUserProfile(authUser.uid);
-          console.log("[useAuth] User profile fetched successfully.");
+          if (__DEV__) console.log("[useAuth] User profile fetched successfully.");
           setUser({
             uid: authUser.uid,
             email: authUser.email,
@@ -28,11 +28,11 @@ export const useAuth = () => {
           setLoading(false);
         }
       } else {
-        console.log("[useAuth] No authenticated user found.");
+        if (__DEV__) console.log("[useAuth] No authenticated user found.");
         setUser(null);
       }
       setLoading(false);
-      console.log("[useAuth] Finished loading state updates.");
+      if (__DEV__) console.log("[useAuth] Finished loading state updates.");
     });
 
     return unsubscribe;

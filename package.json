@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "eject": "expo eject",
     "lint": "eslint src/**/*.js",
-    "format": "prettier --write src/**/*.js"
+    "format": "prettier --write src/**/*.js",
+    "validate-env": "node scripts/validate-env.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -19,11 +20,14 @@
     "@react-navigation/native-stack": "^6.9.0",
     "axios": "^1.6.0",
     "expo": "~54.0.35",
+    "expo-auth-session": "~7.0.11",
+    "expo-dev-client": "~6.0.21",
     "expo-font": "~14.0.12",
     "expo-image": "~3.0.11",
     "expo-image-picker": "~17.0.11",
     "expo-location": "~19.0.8",
     "expo-splash-screen": "~31.0.13",
+    "expo-web-browser": "~15.0.11",
     "firebase": "^10.14.1",
     "geofire-common": "^5.2.0",
     "react": "19.1.0",

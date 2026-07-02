@@ -1,0 +1,25 @@
+{
+  "env": {
+    "node": true,
+    "es2021": true
+  },
+  "extends": [
+    "eslint:recommended"
+  ],
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "globals": {
+    "__DEV__": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": "off",
+    "no-undef": "warn",
+    "no-useless-catch": "off",
+    "no-useless-escape": "off"
+  }
+}

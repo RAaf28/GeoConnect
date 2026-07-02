@@ -9,9 +9,7 @@
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.geoconnect.app",
-      "config": {
-        "googleMapsApiKey": "AIzaSyABWmd0g1FX7an1TcXmmo4Oqd9KOqmwYD8"
-      }
+      "config": {}
     },
     "android": {
       "adaptiveIcon": {
@@ -19,15 +17,10 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.geoconnect.app",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyABWmd0g1FX7an1TcXmmo4Oqd9KOqmwYD8"
-        }
-      },
+      "config": {},
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
         "INTERNET",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -44,7 +37,13 @@
           "locationAlwaysAndWhenInUsePermission": "Allow GeoConnect to access your location."
         }
       ],
-      "@react-native-community/datetimepicker"
-    ]
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "97380260-627e-4713-aecd-0fcf6e9d1321"
+      }
+    }
   }
 }

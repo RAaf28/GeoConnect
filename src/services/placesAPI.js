@@ -1,7 +1,8 @@
 import axios from "axios";
 import { calculateDistance } from "../utils/geoUtils";
 
-const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
+// Changed variable name to reflect the environment variable used for Google Maps/Places API
+const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 // Mock database matching the visual theme of GeoConnect
 const MOCK_PLACES = [
@@ -13,7 +14,7 @@ const MOCK_PLACES = [
     rating: 4.9,
     reviewsCount: 1240,
     address: "42 Meridian Way",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCrnsxRXjibSBwD_xcv8jF2V6ybTAeEXdHhIEmoDvG5hwGNaS9SQBiVHJiIKFfoh6gkl0ac2U1rXwf6S62NV3WuFr7CCtuMgW9XJAtAQOh4aLhssQejR1hBzB1Y60rdos82pZYCd9l9Jb7S355heSvpWEOd0dSsnwwoCRsRcNy5qwKDoP1nTB7O5baSCX5MoPPEEtf-MDyk_NgDx_2SDQzsrH3MXkxEm42nQTn5x94EyQBPHwB6dO-odxDkkcJZKMkdAuQxtRClTWw",
+    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCrnsxRXjibSBwD_xcv8jF2V6ybTAeEXdHhIEmoDvG5hwGNaS9SQBiVHJiIKFfoh6gkl0ac2U1rXwf6S62NV3WuFr7CCtuMgW9XJAtAQOh4aLhssQejR1hBzBb1Y60rdos82pZYCd9l9Jb7S355heSvpWEOd0dSsnwwoCRsRcNy5qwKDoP1nTB7O5baSCX5MoPPEEtf-MDyk_NgDx_2SDQzsrH3MXkxEm42nQTn5x94EyQBPHwB6dO-odxDkkcJZKMkdAuQxtRClTWw",
     latOffset: 0.015,
     lngOffset: -0.012,
   },
@@ -61,7 +62,7 @@ const MOCK_PLACES = [
     rating: 4.5,
     reviewsCount: 2350,
     address: "1 Meridian Center",
-    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuARgKiUxPNXwgIpVhbG7mCfUrBZBD3ech4wQgtOMysfXcopoWFCiUYJpnuZ38rP_IM6Hmgqk8JLrNj-Fie8z6JimEiDBxgXE5Kn3O3VtLqAwle4fVQ-vulWs2NV613asTqL43p73vLiMZUCRv3tquTcP3iWtk7bkyWMjQ9ylHeGWZJjcb06F96LzlPc8pYDx7No35lzQsjXyS08ptBeLqpRnybVeErymlzkjMdSi2HywPLHCIY1WA2HYOsd7oWooKb6Wm4HOS-e0IA",
+    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuARgKiUxPNXwgIpVhbGbG7mCfUrBZBD3ech4wQgtOMysfXcopoWFCiUYJpnuZ38rP_IM6Hmgqk8JLrNj-Fie8z6JimEiDBxgXE5Kn3O3VtLqAwle4fVQ-vulWs2NV613asTqL43p73vLiMZUCRv3tquTcP3iWtk7bkyWMjQ9ylHeGWZJjcb06F96LzlPc8pYDx7No35lzQsjXyS08ptBeLqpRnybVeErymlzkjMdSi2HywPLHCIY1WA2HYOsd7oWooKb6Wm4HOS-e0IA",
     latOffset: 0.022,
     lngOffset: 0.025,
   },
@@ -81,9 +82,11 @@ const MOCK_PLACES = [
 
 export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") => {
   // If a valid Google Places API Key is present, try loading from Google
-  if (GOOGLE_PLACES_API_KEY && GOOGLE_PLACES_API_KEY !== "your_google_places_api_key_here") {
+  if (GOOGLE_PLACES_API_KEY && GOOGLE_PLACES_API_KEY !== "your_google_maps_api_key_here") {
     try {
-      console.log(`[PlacesAPI] Fetching real Google Places for category: ${category}`);
+      if (__DEV__) {
+        console.log(`[PlacesAPI] Fetching real Google Places for category: ${category}`);
+      }
       const typeMap = {
         Cafe: "cafe",
         Park: "park",
@@ -93,7 +96,7 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") =>
       const type = typeMap[category] || "establishment";
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=${type}&key=${GOOGLE_PLACES_API_KEY}`;
       const response = await axios.get(url);
-      
+
       if (response.data.status === "OK" || response.data.status === "ZERO_RESULTS") {
         const results = response.data.results || [];
         return results.map((place, idx) => {
@@ -103,7 +106,7 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") =>
             place.geometry.location.lat,
             place.geometry.location.lng
           );
-          
+
           let image = "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500";
           if (place.photos && place.photos.length > 0) {
             image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${GOOGLE_PLACES_API_KEY}`;
@@ -131,7 +134,9 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") =>
   }
 
   // Fallback to mock places database relative to the user's location
-  console.log(`[PlacesAPI] Returning relative mock places for category: ${category}`);
+  if (__DEV__) {
+    console.log(`[PlacesAPI] Returning relative mock places for category: ${category}`);
+  }
   return MOCK_PLACES.filter((place) => place.category === category).map((place) => {
     const placeLat = latitude + place.latOffset;
     const placeLng = longitude + place.lngOffset;

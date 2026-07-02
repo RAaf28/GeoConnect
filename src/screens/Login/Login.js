@@ -1,315 +1,241 @@
-import React, { useRef, useEffect } from 'react';
-import { StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+  ActivityIndicator
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
-import { useAuthStore, useThemeStore } from '../../store/stores';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
+import { useThemeStore } from '../../store/stores';
 import { signInWithEmail, signInWithGoogle } from '../../services/authService';
+import { getUserProfile, createUserProfile } from '../../services/firestoreService';
 
-const htmlContent = `<!DOCTYPE html><html class="light" lang="en"><head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<title>GeoConnect - Login</title>
-<!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
-<link href="https://fonts.googleapis.com" rel="preconnect">
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
-<!-- Material Symbols -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                "primary-container": "#6063ee",
-                "on-error": "#ffffff",
-                "error-container": "#ffdad6",
-                "outline-variant": "#c7c4d7",
-                "surface-container-low": "#f5f2fe",
-                "on-tertiary-container": "#fffbff",
-                "tertiary-fixed": "#ffdcc5",
-                "surface-container-high": "#e9e6f3",
-                "surface": "#fcf8ff",
-                "tertiary-container": "#b55d00",
-                "tertiary": "#904900",
-                "on-primary": "#ffffff",
-                "on-error-container": "#93000a",
-                "inverse-primary": "#c0c1ff",
-                "on-surface-variant": "#464554",
-                "surface-container": "#efecf8",
-                "muted-zinc": "#64748B",
-                "surface-bright": "#fcf8ff",
-                "on-secondary": "#ffffff",
-                "on-surface": "#1b1b23",
-                "tertiary-fixed-dim": "#ffb783",
-                "surface-variant": "#e4e1ed",
-                "error": "#ba1a1a",
-                "primary": "#4648d4",
-                "secondary-container": "#dae2fd",
-                "primary-fixed-dim": "#c0c1ff",
-                "canvas-white": "#F9FAFB",
-                "on-tertiary-fixed": "#301400",
-                "on-tertiary": "#ffffff",
-                "secondary-fixed": "#dae2fd",
-                "inverse-on-surface": "#f2effb",
-                "on-secondary-fixed-variant": "#3f465c",
-                "primary-fixed": "#e1e0ff",
-                "on-primary-fixed": "#07006c",
-                "inverse-surface": "#303038",
-                "secondary": "#565e74",
-                "on-secondary-fixed": "#131b2e",
-                "on-primary-container": "#fffbff",
-                "outline": "#767586",
-                "surface-tint": "#494bd6",
-                "surface-pure": "#FFFFFF",
-                "surface-dim": "#dbd8e4",
-                "surface-container-highest": "#e4e1ed",
-                "soft-border": "rgba(226, 232, 240, 0.8)",
-                "background": "#fcf8ff",
-                "on-secondary-container": "#5c647a",
-                "secondary-fixed-dim": "#bec6e0",
-                "on-tertiary-fixed-variant": "#703700",
-                "on-background": "#1b1b23",
-                "surface-container-lowest": "#ffffff",
-                "on-primary-fixed-variant": "#2f2ebe"
-            },
-            "borderRadius": {
-                "DEFAULT": "0.25rem",
-                "lg": "0.5rem",
-                "xl": "0.75rem",
-                "full": "9999px"
-            },
-            "spacing": {
-                "margin-page": "24px",
-                "stack-gap": "12px",
-                "safe-area": "32px",
-                "gutter-grid": "16px"
-            },
-            "fontFamily": {
-                "technical-label": ["JetBrains Mono"],
-                "body-md": ["Plus Jakarta Sans"],
-                "headline-md": ["Plus Jakarta Sans"],
-                "headline-lg-mobile": ["Plus Jakarta Sans"],
-                "body-lg": ["Plus Jakarta Sans"],
-                "headline-lg": ["Plus Jakarta Sans"]
-            },
-            "fontSize": {
-                "technical-label": ["12px", {"lineHeight": "1.4", "fontWeight": "500"}],
-                "body-md": ["14px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                "headline-md": ["24px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
-                "headline-lg-mobile": ["28px", {"lineHeight": "1.2", "fontWeight": "700"}],
-                "body-lg": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}]
-            }
-          },
-        },
-      }
-    </script>
-<style>
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #fcf8ff;
-            overflow-x: hidden;
-        }
-        .glass-panel {
-            backdrop-filter: blur(12px);
-            background: rgba(255, 255, 255, 0.7);
-            border: 1px solid rgba(226, 232, 240, 0.8);
-        }
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-            vertical-align: middle;
-        }
-        .whisper-shadow {
-            box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.1);
-        }
-        .map-mesh {
-            background-image: radial-gradient(#4648d4 0.5px, transparent 0.5px);
-            background-size: 24px 24px;
-            opacity: 0.05;
-        }
-    </style>
-</head>
-<body class="flex min-h-screen items-center justify-center p-4">
-<!-- Ambient Background -->
-<div class="fixed inset-0 -z-10 bg-background overflow-hidden">
-<div class="map-mesh absolute inset-0"></div>
-<!-- Decorative subtle blurred shapes for "Modern Discovery" vibe -->
-<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[100px]"></div>
-<div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-secondary/5 rounded-full blur-[100px]"></div>
-</div>
-<!-- Main Container -->
-<main class="w-full max-auto max-w-[440px] flex flex-col items-center">
-<!-- Top App Bar - Brand Identity (From JSON) -->
-<header class="flex justify-between items-center px-margin-page py-4 w-full mb-8">
-<div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-3xl" data-icon="explore">explore</span>
-<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim tracking-tight">GeoConnect</h1>
-</div>
-</header>
-<!-- Login Card -->
-<div class="glass-panel w-full rounded-2xl p-8 whisper-shadow border border-soft-border">
-<!-- Headlines -->
-<div class="mb-8">
-<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface mb-2">Welcome back</h2>
-<p class="font-body-md text-body-md text-on-surface-variant">Log in to explore your neighborhood and connect with local adventurers.</p>
-</div>
-<!-- Login Form -->
-<form class="space-y-6" id="loginForm" onsubmit="event.preventDefault(); handleFormLogin();">
-<!-- Email Input -->
-<div class="space-y-2">
-<label class="font-technical-label text-technical-label text-outline uppercase tracking-wider" for="email">Email Address</label>
-<div class="relative group">
-<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline group-focus-within:text-primary transition-colors" data-icon="mail">mail</span>
-<input class="w-full h-14 pl-12 pr-4 bg-surface-container-lowest border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-xl font-body-md text-body-md transition-all outline-none" id="email" placeholder="alex@example.com" required="" type="email">
-</div>
-</div>
-<!-- Password Input -->
-<div class="space-y-2">
-<div class="flex justify-between items-center">
-<label class="font-technical-label text-technical-label text-outline uppercase tracking-wider" for="password">Password</label>
-<a class="font-technical-label text-technical-label text-primary hover:underline transition-all" href="#" onclick="event.preventDefault(); window.ReactNativeWebView.postMessage('navigateForgot');">Forgot Password?</a>
-</div>
-<div class="relative group">
-<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline group-focus-within:text-primary transition-colors" data-icon="lock">lock</span>
-<input class="w-full h-14 pl-12 pr-12 bg-surface-container-lowest border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-xl font-body-md text-body-md transition-all outline-none" id="password" placeholder="••••••••" required="" type="password">
-<button class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline hover:text-on-surface-variant transition-colors" data-icon="visibility" id="togglePassword" type="button">
-                            visibility
-                        </button>
-</div>
-</div>
-<!-- Remember Me (Discovery Detail) -->
-<div class="flex items-center gap-3 py-2">
-<input class="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary-container cursor-pointer" id="remember" type="checkbox">
-<label class="font-body-md text-body-md text-on-surface-variant select-none cursor-pointer" for="remember">Stay logged in for discovery</label>
-</div>
-<!-- Primary Action -->
-<button class="w-full h-14 bg-primary text-on-primary font-headline-md text-[16px] rounded-xl whisper-shadow hover:opacity-90 active:-translate-y-px transition-all duration-200 flex items-center justify-center gap-2" type="submit">
-                    Login
-                    <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
-</button>
-</form>
-<!-- Social Login Divider -->
-<div class="relative my-8 flex items-center">
-<div class="flex-grow border-t border-outline-variant"></div>
-<span class="px-4 font-technical-label text-technical-label text-outline">OR EXPLORE WITH</span>
-<div class="flex-grow border-t border-outline-variant"></div>
-</div>
-<!-- Social Buttons -->
-<div class="grid gap-4">
-<button class="flex items-center justify-center gap-2 h-12 rounded-xl border border-outline-variant font-body-md text-body-md text-on-surface hover:bg-surface-container-high transition-colors" type="button" onclick="window.ReactNativeWebView.postMessage('performGoogleLogin')"><img alt="Google" class="w-5 h-5" src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg">Google</button>
-
-</div>
-</div>
-<!-- Secondary Navigation (From JSON Intent) -->
-<footer class="mt-8 text-center space-y-4">
-<p class="font-body-md text-body-md text-on-surface-variant">
-                Don't have an account? 
-                <a class="text-primary font-bold hover:underline transition-all" href="#" onclick="event.preventDefault(); window.ReactNativeWebView.postMessage('navigateRegister');">Register</a>
-</p>
-<div class="flex items-center justify-center gap-6">
-<a class="font-technical-label text-technical-label text-outline hover:text-primary transition-colors flex items-center gap-1" href="#">
-<span class="material-symbols-outlined text-[14px]" data-icon="help_outline">help_outline</span>
-                    Help
-                </a>
-<a class="font-technical-label text-technical-label text-outline hover:text-primary transition-colors flex items-center gap-1" href="#">
-<span class="material-symbols-outlined text-[14px]" data-icon="language">language</span>
-                    English
-                </a>
-</div>
-</footer>
-</main>
-<!-- Micro-interactions Script -->
-<script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const passwordInput = document.getElementById('password');
-            const toggleButton = document.getElementById('togglePassword');
-
-            toggleButton.addEventListener('click', () => {
-                const isPassword = passwordInput.type === 'password';
-                passwordInput.type = isPassword ? 'text' : 'password';
-                toggleButton.textContent = isPassword ? 'visibility_off' : 'visibility';
-                toggleButton.setAttribute('data-icon', isPassword ? 'visibility_off' : 'visibility');
-            });
-
-            // Button spring effect simulator
-            const mainBtn = document.querySelector('button[type="submit"]');
-            mainBtn.addEventListener('mousedown', () => {
-                mainBtn.style.transform = 'scale(0.98)';
-            });
-            mainBtn.addEventListener('mouseup', () => {
-                mainBtn.style.transform = 'scale(1)';
-            });
-            mainBtn.addEventListener('mouseleave', () => {
-                mainBtn.style.transform = 'scale(1)';
-            });
-        });
-
-        function handleFormLogin() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-                action: 'performLogin',
-                email: email,
-                password: password
-            }));
-        }
-    </script>
-
-
-</body></html>`;
+WebBrowser.maybeCompleteAuthSession();
 
 export default function Login({ navigation }) {
-  const webViewRef = useRef(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [secureText, setSecureText] = useState(true);
+  const [loading, setLoading] = useState(false);
   const isDark = useThemeStore((state) => state.isDark);
 
+  const colors = {
+    background: isDark ? '#1b1b23' : '#fcf8ff',
+    text: isDark ? '#f2effb' : '#1b1b23',
+    textMuted: isDark ? '#9fa2b2' : '#64748B',
+    card: isDark ? '#303038' : '#ffffff',
+    border: isDark ? 'rgba(199, 196, 215, 0.15)' : 'rgba(226, 232, 240, 0.8)',
+    inputBg: isDark ? '#23232c' : '#fcf8ff',
+    primary: '#4648d4',
+  };
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  });
+
   useEffect(() => {
-    webViewRef.current?.injectJavaScript(`
-      document.documentElement.className = "${isDark ? 'dark' : 'light'}";
-      true;
-    `);
-  }, [isDark]);
+    if (response) {
+      if (response.type === 'success') {
+        const { id_token } = response.authentication;
+        (async () => {
+          setLoading(true);
+          try {
+            const authUser = await signInWithGoogle(id_token);
+            const profile = await getUserProfile(authUser.uid);
+            if (!profile) {
+              await createUserProfile(authUser.uid, {
+                displayName: authUser.displayName || 'Explorer',
+                email: authUser.email || '',
+                photoURL: authUser.photoURL || '',
+                bio: '',
+              });
+            }
+          } catch (error) {
+            Alert.alert("Google Login Error", error.message);
+          } finally {
+            setLoading(false);
+          }
+        })();
+      } else {
+        setLoading(false);
+        if (response.type === 'error') {
+          Alert.alert("Google Login Error", response.error?.message || "Authentication failed");
+        }
+      }
+    }
+  }, [response]);
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Validation Error", "Please fill in all fields.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await signInWithEmail(email.trim(), password.trim());
+    } catch (error) {
+      Alert.alert("Login Error", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    const webId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    if (!webId || webId === "your_web_client_id_here") {
+      Alert.alert("Google Login Config Error", "Google Web Client ID is not configured in .env file.");
+      return;
+    }
+    setLoading(true);
+    promptAsync().catch((error) => {
+      Alert.alert("Google Login Error", error.message);
+      setLoading(false);
+    });
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        source={{ html: htmlContent }}
-        style={styles.webview}
-        originWhitelist={['*']}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        // Add basic message handling for potential future navigation
-        onMessage={async (event) => {
-          const message = event.nativeEvent.data;
-          if (message === 'goBack') navigation.goBack();
-          else if (message === 'navigateRegister') navigation.navigate('Register');
-          else if (message === 'navigateLogin') navigation.navigate('Login');
-          else if (message === 'navigateForgot') navigation.navigate('ForgotPassword');
-          else if (message === 'performGoogleLogin') {
-            try {
-              await signInWithGoogle();
-            } catch (error) {
-              Alert.alert("Google Login Error", error.message);
-            }
-          } else {
-            try {
-              const data = JSON.parse(message);
-              if (data.action === 'performLogin') {
-                await signInWithEmail(data.email, data.password);
-              }
-            } catch (error) {
-              if (error instanceof SyntaxError) {
-                // Ignore standard string actions
-              } else {
-                Alert.alert("Login Error", error.message);
-              }
-            }
-          }
-        }}
-      />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          {/* Header Brand Identity */}
+          <View style={styles.header}>
+            <MaterialIcons name="explore" size={32} color={colors.primary} />
+            <Text style={[styles.brandName, { color: colors.primary }]}>GeoConnect</Text>
+          </View>
+
+          {/* Login Card */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
+              <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                Log in to explore your neighborhood and connect with local adventurers.
+              </Text>
+            </View>
+
+            {/* Email Field */}
+            <View style={styles.inputContainer}>
+              <Text style={[styles.label, { color: colors.textMuted }]}>EMAIL ADDRESS</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <MaterialIcons name="email" size={20} color={colors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="alex@example.com"
+                  placeholderTextColor={colors.textMuted}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+
+            {/* Password Field */}
+            <View style={styles.inputContainer}>
+              <View style={styles.labelRow}>
+                <Text style={[styles.label, { color: colors.textMuted }]}>PASSWORD</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+                  <Text style={[styles.forgotText, { color: colors.primary }]}>Forgot Password?</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.inputWrapper, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <MaterialIcons name="lock" size={20} color={colors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={secureText}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity onPress={() => setSecureText(!secureText)} style={styles.visibilityToggle}>
+                  <MaterialIcons
+                    name={secureText ? 'visibility' : 'visibility-off'}
+                    size={20}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Login Button */}
+            <TouchableOpacity
+              style={[styles.loginBtn, { backgroundColor: colors.primary }]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <View style={styles.btnContent}>
+                  <Text style={styles.loginBtnText}>Login</Text>
+                  <MaterialIcons name="arrow-forward" size={20} color="#ffffff" />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dividerText, { color: colors.textMuted }]}>OR EXPLORE WITH</Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            </View>
+
+            {/* Google Login Button */}
+            <TouchableOpacity
+              style={[styles.googleBtn, { borderColor: colors.border }]}
+              onPress={handleGoogleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <View style={styles.googleContent}>
+                <MaterialIcons name="account-circle" size={20} color={colors.text} />
+                <Text style={[styles.googleBtnText, { color: colors.text }]}>Continue with Google</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer Navigation */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: colors.textMuted }]}>
+              Don't have an account?{' '}
+              <Text
+                style={[styles.footerLink, { color: colors.primary }]}
+                onPress={() => navigation.navigate('Register')}
+              >
+                Register
+              </Text>
+            </Text>
+            <View style={styles.footerLinksRow}>
+              <TouchableOpacity style={styles.footerIconLink}>
+                <MaterialIcons name="help-outline" size={14} color={colors.textMuted} />
+                <Text style={[styles.footerLinkText, { color: colors.textMuted }]}>Help</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.footerIconLink}>
+                <MaterialIcons name="language" size={14} color={colors.textMuted} />
+                <Text style={[styles.footerLinkText, { color: colors.textMuted }]}>English</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -317,10 +243,164 @@ export default function Login({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fcf8ff',
   },
-  webview: {
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 32,
+    alignSelf: 'flex-start',
+  },
+  brandName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 20,
+    elevation: 3,
+  },
+  cardHeader: {
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 1,
     flex: 1,
-    backgroundColor: 'transparent',
+  },
+  forgotText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 14,
+  },
+  visibilityToggle: {
+    padding: 4,
+  },
+  loginBtn: {
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: '#4648d4',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  btnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginBtnText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginRight: 8,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginHorizontal: 16,
+    letterSpacing: 1,
+  },
+  googleBtn: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  googleBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  footer: {
+    marginTop: 32,
+    alignItems: 'center',
+    width: '100%',
+  },
+  footerText: {
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  footerLink: {
+    fontWeight: 'bold',
+  },
+  footerLinksRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  footerIconLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+  },
+  footerLinkText: {
+    fontSize: 12,
+    marginLeft: 4,
   },
 });

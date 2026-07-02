@@ -2,18 +2,19 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  signInWithPopup,
-  GoogleAuthProvider,
+  // Removed GoogleAuthProvider, signInWithPopup as they are not supported in native Expo
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
   onAuthStateChanged,
   updateProfile,
   sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithCredential,
 } from "firebase/auth";
 import { auth } from "./firebase";
 
-const googleProvider = new GoogleAuthProvider();
+// const googleProvider = new GoogleAuthProvider(); // Removed: Google login not configured for native build
 
 // Create account with email
 export const createAccount = async (email, password, displayName) => {
@@ -46,10 +47,11 @@ export const signInWithEmail = async (email, password) => {
   }
 };
 
-// Sign in with Google
-export const signInWithGoogle = async () => {
+// Sign in with Google - not available in this build
+export const signInWithGoogle = async (idToken) => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    const credential = GoogleAuthProvider.credential(idToken);
+    const result = await signInWithCredential(auth, credential);
     return result.user;
   } catch (error) {
     throw error;
@@ -91,7 +93,6 @@ export const onAuthChange = (callback) => {
 export const getCurrentUser = () => {
   return auth.currentUser;
 };
-
 
 // Send password reset email
 export const sendPasswordReset = async (email) => {

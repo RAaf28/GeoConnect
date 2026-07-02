@@ -14,7 +14,9 @@ import {
   limit as firestoreLimit,
   increment,
   Timestamp,
-  onSnapshot
+  onSnapshot,
+  runTransaction,
+  writeBatch
 } from "firebase/firestore";
 import { firestore } from "./firebase";
 
@@ -163,18 +165,25 @@ export const getLocationPrivacy = async (userId) => {
 export const followUser = async (currentUserId, targetUserId) => {
   try {
     const followDocId = `${currentUserId}_${targetUserId}`;
-    await setDoc(doc(firestore, "follows", followDocId), {
-      followerId: currentUserId,
-      followingId: targetUserId,
-      createdAt: serverTimestamp(),
-    });
+    const followRef = doc(firestore, "follows", followDocId);
+    const currentUserRef = doc(firestore, "users", currentUserId);
+    const targetUserRef = doc(firestore, "users", targetUserId);
 
-    // Increment counters
-    await updateDoc(doc(firestore, "users", currentUserId), {
-      followingCount: increment(1),
-    });
-    await updateDoc(doc(firestore, "users", targetUserId), {
-      followersCount: increment(1),
+    await runTransaction(firestore, async (transaction) => {
+      const followSnap = await transaction.get(followRef);
+      if (!followSnap.exists()) {
+        transaction.set(followRef, {
+          followerId: currentUserId,
+          followingId: targetUserId,
+          createdAt: serverTimestamp(),
+        });
+        transaction.update(currentUserRef, {
+          followingCount: increment(1),
+        });
+        transaction.update(targetUserRef, {
+          followersCount: increment(1),
+        });
+      }
     });
   } catch (error) {
     throw error;
@@ -189,14 +198,21 @@ export const followUser = async (currentUserId, targetUserId) => {
 export const unfollowUser = async (currentUserId, targetUserId) => {
   try {
     const followDocId = `${currentUserId}_${targetUserId}`;
-    await deleteDoc(doc(firestore, "follows", followDocId));
+    const followRef = doc(firestore, "follows", followDocId);
+    const currentUserRef = doc(firestore, "users", currentUserId);
+    const targetUserRef = doc(firestore, "users", targetUserId);
 
-    // Decrement counters
-    await updateDoc(doc(firestore, "users", currentUserId), {
-      followingCount: increment(-1),
-    });
-    await updateDoc(doc(firestore, "users", targetUserId), {
-      followersCount: increment(-1),
+    await runTransaction(firestore, async (transaction) => {
+      const followSnap = await transaction.get(followRef);
+      if (followSnap.exists()) {
+        transaction.delete(followRef);
+        transaction.update(currentUserRef, {
+          followingCount: increment(-1),
+        });
+        transaction.update(targetUserRef, {
+          followersCount: increment(-1),
+        });
+      }
     });
   } catch (error) {
     throw error;
@@ -431,12 +447,20 @@ export const deletePost = async (postId) => {
  */
 export const likePost = async (postId, userId) => {
   try {
-    await setDoc(doc(firestore, "posts", postId, "likes", userId), {
-      userId,
-      createdAt: serverTimestamp(),
-    });
-    await updateDoc(doc(firestore, "posts", postId), {
-      likesCount: increment(1),
+    const likeRef = doc(firestore, "posts", postId, "likes", userId);
+    const postRef = doc(firestore, "posts", postId);
+
+    await runTransaction(firestore, async (transaction) => {
+      const likeSnap = await transaction.get(likeRef);
+      if (!likeSnap.exists()) {
+        transaction.set(likeRef, {
+          userId,
+          createdAt: serverTimestamp(),
+        });
+        transaction.update(postRef, {
+          likesCount: increment(1),
+        });
+      }
     });
   } catch (error) {
     throw error;
@@ -450,9 +474,17 @@ export const likePost = async (postId, userId) => {
  */
 export const unlikePost = async (postId, userId) => {
   try {
-    await deleteDoc(doc(firestore, "posts", postId, "likes", userId));
-    await updateDoc(doc(firestore, "posts", postId), {
-      likesCount: increment(-1),
+    const likeRef = doc(firestore, "posts", postId, "likes", userId);
+    const postRef = doc(firestore, "posts", postId);
+
+    await runTransaction(firestore, async (transaction) => {
+      const likeSnap = await transaction.get(likeRef);
+      if (likeSnap.exists()) {
+        transaction.delete(likeRef);
+        transaction.update(postRef, {
+          likesCount: increment(-1),
+        });
+      }
     });
   } catch (error) {
     throw error;
@@ -488,17 +520,24 @@ export const hasLikedPost = async (postId, userId) => {
  */
 export const addComment = async (postId, commentData) => {
   try {
-    const docRef = await addDoc(
-      collection(firestore, "posts", postId, "comments"),
-      {
-        ...commentData,
-        createdAt: serverTimestamp(),
-      },
-    );
-    await updateDoc(doc(firestore, "posts", postId), {
+    const commentCol = collection(firestore, "posts", postId, "comments");
+    const commentRef = doc(commentCol);
+    const postRef = doc(firestore, "posts", postId);
+
+    const batch = writeBatch(firestore);
+
+    batch.set(commentRef, {
+      ...commentData,
+      createdAt: serverTimestamp(),
+    });
+
+    batch.update(postRef, {
       commentsCount: increment(1),
     });
-    return docRef.id;
+
+    await batch.commit();
+
+    return commentRef.id;
   } catch (error) {
     throw error;
   }
@@ -749,40 +788,57 @@ export const updateRSVP = async (eventId, userId, status) => {
   try {
     const rsvpDocId = `${eventId}_${userId}`;
     const rsvpRef = doc(firestore, "rsvp", rsvpDocId);
-    const existingRsvp = await getDoc(rsvpRef);
+    const eventRef = doc(firestore, "events", eventId);
 
-    // If updating existing RSVP, adjust old count
-    if (existingRsvp.exists()) {
-      const oldStatus = existingRsvp.data().status;
-      if (oldStatus === "going") {
-        await updateDoc(doc(firestore, "events", eventId), {
-          "rsvpCounts.going": increment(-1),
-        });
-      } else if (oldStatus === "interested") {
-        await updateDoc(doc(firestore, "events", eventId), {
-          "rsvpCounts.interested": increment(-1),
-        });
+    await runTransaction(firestore, async (transaction) => {
+      const rsvpSnap = await transaction.get(rsvpRef);
+      const eventSnap = await transaction.get(eventRef);
+
+      if (!eventSnap.exists()) {
+        throw new Error("Event does not exist");
       }
-    }
 
-    // Set new RSVP
-    await setDoc(rsvpRef, {
-      userId,
-      eventId,
-      status,
-      updatedAt: serverTimestamp(),
+      const updateObj = {};
+
+      if (rsvpSnap.exists()) {
+        const oldStatus = rsvpSnap.data().status;
+        if (oldStatus !== status) {
+          // Decrement old status count
+          if (oldStatus === "going") {
+            updateObj["rsvpCounts.going"] = increment(-1);
+          } else if (oldStatus === "interested") {
+            updateObj["rsvpCounts.interested"] = increment(-1);
+          }
+
+          // Increment new status count
+          if (status === "going") {
+            updateObj["rsvpCounts.going"] = increment(1);
+          } else if (status === "interested") {
+            updateObj["rsvpCounts.interested"] = increment(1);
+          }
+        }
+      } else {
+        // Increment new status count
+        if (status === "going") {
+          updateObj["rsvpCounts.going"] = increment(1);
+        } else if (status === "interested") {
+          updateObj["rsvpCounts.interested"] = increment(1);
+        }
+      }
+
+      // Set new RSVP document
+      transaction.set(rsvpRef, {
+        userId,
+        eventId,
+        status,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update event RSVP counts if there are changes
+      if (Object.keys(updateObj).length > 0) {
+        transaction.update(eventRef, updateObj);
+      }
     });
-
-    // Increment new count
-    if (status === "going") {
-      await updateDoc(doc(firestore, "events", eventId), {
-        "rsvpCounts.going": increment(1),
-      });
-    } else if (status === "interested") {
-      await updateDoc(doc(firestore, "events", eventId), {
-        "rsvpCounts.interested": increment(1),
-      });
-    }
   } catch (error) {
     throw error;
   }

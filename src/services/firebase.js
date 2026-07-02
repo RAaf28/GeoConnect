@@ -1,5 +1,5 @@
-import { initializeApp } from "firebase/app";
-import { getAuth, initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { getApps, initializeApp, getApp } from "firebase/app";
+import { initializeAuth, getReactNativePersistence, getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -13,29 +13,30 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-console.log("[Firebase] Initializing Firebase App...");
-const app = initializeApp(firebaseConfig);
-console.log("[Firebase] Firebase App initialized successfully.");
+if (__DEV__) console.log("[Firebase] Initializing Firebase App...");
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+if (__DEV__) console.log("[Firebase] Firebase App initialized successfully.");
 
-console.log("[Firebase] Initializing Auth...");
-let authInstance;
+if (__DEV__) console.log("[Firebase] Initializing Auth with AsyncStorage persistence...");
+let auth;
 try {
-  authInstance = getAuth(app);
-  console.log("[Firebase] Firebase Auth already initialized, reusing instance.");
-} catch (e) {
-  authInstance = initializeAuth(app, {
+  auth = initializeAuth(app, {
     persistence: getReactNativePersistence(AsyncStorage),
   });
-  console.log("[Firebase] Firebase Auth initialized successfully with AsyncStorage persistence.");
+  if (__DEV__) console.log("[Firebase] Firebase Auth initialized successfully with AsyncStorage persistence.");
+} catch (e) {
+  // If already initialized, get the existing auth instance
+  if (__DEV__) console.log("[Firebase] Firebase Auth already initialized, reusing instance.");
+  auth = getAuth(app);
 }
-export const auth = authInstance;
 
-console.log("[Firebase] Initializing Firestore...");
-export const firestore = getFirestore(app);
-console.log("[Firebase] Firestore initialized successfully.");
+if (__DEV__) console.log("[Firebase] Initializing Firestore...");
+const firestore = getFirestore(app);
+if (__DEV__) console.log("[Firestore] Firestore initialized successfully.");
 
-console.log("[Firebase] Initializing Storage...");
-export const storage = getStorage(app);
-console.log("[Firebase] Storage initialized successfully.");
+if (__DEV__) console.log("[Firebase] Initializing Storage...");
+const storage = getStorage(app);
+if (__DEV__) console.log("[Storage] Storage initialized successfully.");
 
+export { auth, firestore, storage };
 export default app;

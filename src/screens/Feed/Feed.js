@@ -142,8 +142,8 @@ const getHtmlContent = (isDark) => {
 <div class="sticky top-16 z-40 py-4 bg-background/95 dark:bg-inverse-surface/95 backdrop-blur-sm mb-2">
 <div class="flex items-center justify-between">
 <div class="flex gap-2 p-1 bg-surface-container-low dark:bg-white/5 rounded-full">
-<button class="px-6 py-2 rounded-full text-technical-label font-technical-label bg-primary text-on-primary shadow-sm transition-all">Feed</button>
-<button class="px-6 py-2 rounded-full text-technical-label font-technical-label text-on-surface-variant dark:text-inverse-on-surface hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-all">Trending</button>
+<button id="tabFeed" onclick="switchTab('feed')" class="px-6 py-2 rounded-full text-technical-label font-technical-label bg-primary text-on-primary shadow-sm transition-all">Feed</button>
+<button id="tabTrending" onclick="switchTab('trending')" class="px-6 py-2 rounded-full text-technical-label font-technical-label text-on-surface-variant dark:text-inverse-on-surface hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-all">Trending</button>
 </div>
 </div>
 </div>
@@ -263,6 +263,23 @@ const getHtmlContent = (isDark) => {
             if (countEl) countEl.textContent = newCount;
         }
 
+        // Tab switching logic
+        var activeTab = 'feed';
+        function switchTab(tab) {
+            if (activeTab === tab) return;
+            activeTab = tab;
+            var feedBtn = document.getElementById('tabFeed');
+            var trendBtn = document.getElementById('tabTrending');
+            if (tab === 'feed') {
+                feedBtn.className = 'px-6 py-2 rounded-full text-technical-label font-technical-label bg-primary text-on-primary shadow-sm transition-all';
+                trendBtn.className = 'px-6 py-2 rounded-full text-technical-label font-technical-label text-on-surface-variant dark:text-inverse-on-surface hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-all';
+            } else {
+                trendBtn.className = 'px-6 py-2 rounded-full text-technical-label font-technical-label bg-primary text-on-primary shadow-sm transition-all';
+                feedBtn.className = 'px-6 py-2 rounded-full text-technical-label font-technical-label text-on-surface-variant dark:text-inverse-on-surface hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-all';
+            }
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'switchTab', tab: tab }));
+        }
+
         // Pull to refresh support
         let touchStartY = 0;
         let isPulling = false;
@@ -313,6 +330,7 @@ export default function Feed({ navigation }) {
   const [webViewReady, setWebViewReady] = useState(false);
   const rawPostsRef = useRef([]);
   const rawEventsRef = useRef([]);
+  const activeTabRef = useRef('feed');
 
   // Sync Dark/Light Mode
   useEffect(() => {
@@ -331,11 +349,20 @@ export default function Feed({ navigation }) {
       const typedPosts = posts.map(p => ({ ...p, type: 'post' }));
       const typedEvents = events.map(e => ({ ...e, type: 'event' }));
       
-      const combined = [...typedPosts, ...typedEvents].sort((a, b) => {
+      let combined = [...typedPosts, ...typedEvents].sort((a, b) => {
         const timeA = a.createdAt?.seconds || 0;
         const timeB = b.createdAt?.seconds || 0;
         return timeB - timeA;
       }).slice(0, 20);
+
+      // If trending tab is active, sort by likes count
+      if (activeTabRef.current === 'trending') {
+        combined = combined.sort((a, b) => {
+          const likesA = a.likesCount || 0;
+          const likesB = b.likesCount || 0;
+          return likesB - likesA;
+        });
+      }
       
       const enrichedPosts = await Promise.all(
         combined.map(async (item) => {
@@ -346,10 +373,15 @@ export default function Feed({ navigation }) {
             if (item.type === 'post') {
               liked = user ? await hasLikedPost(item.id, user.uid) : false;
             }
+            // Use current user's auth displayName as fallback when viewing own posts
+            let displayName = author?.displayName || 'Explorer';
+            if (user && (item.authorId === user.uid || item.creatorId === user.uid)) {
+              displayName = author?.displayName || user.displayName || 'Explorer';
+            }
             return {
               ...item,
-              authorName: author?.displayName || 'Explorer',
-              authorPhoto: author?.photoURL || '',
+              authorName: displayName,
+              authorPhoto: author?.photoURL || (user && (item.authorId === user.uid || item.creatorId === user.uid) ? user.photoURL || '' : ''),
               isLiked: liked,
             };
           } catch (e) {
@@ -396,6 +428,9 @@ export default function Feed({ navigation }) {
       if (data.action === 'loadFeed') {
         setWebViewReady(true);
       } else if (data.action === 'refreshFeed') {
+        enrichAndRender();
+      } else if (data.action === 'switchTab') {
+        activeTabRef.current = data.tab;
         enrichAndRender();
       }
       else if (data.action === 'likePost') {

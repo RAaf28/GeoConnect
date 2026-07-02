@@ -58,13 +58,15 @@ const getHtmlContent = (isDark) => {
         .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
         .stagger-reveal { animation: staggerReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; transform: translateY(10px); }
         @keyframes staggerReveal { to { opacity: 1; transform: translateY(0); } }
+        .no-spin { animation: none !important; }
+        .break-words { overflow-wrap: break-word; word-break: break-word; }
     </style>
 </head>
 <body class="bg-background dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface font-body-md min-h-screen pb-4">
 <!-- Top Bar -->
 <header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
 <div class="flex items-center gap-2">
-<span class="material-symbols-outlined text-primary text-[28px]">explore</span>
+<span class="material-symbols-outlined text-primary text-[28px] no-spin" style="font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;">public</span>
 <span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
 </div>
 <div class="flex items-center gap-3">
@@ -97,26 +99,26 @@ const getHtmlContent = (isDark) => {
             container.innerHTML =
                 '<section class="stagger-reveal text-center" style="animation-delay: 0.1s;">' +
                     '<div class="w-28 h-28 mx-auto rounded-full overflow-hidden border-4 border-primary/20 mb-4">' + avatarImg + '</div>' +
-                    '<h1 class="text-headline-lg-mobile font-headline-lg-mobile text-on-surface dark:text-inverse-on-surface">' + name + '</h1>' +
-                    '<p class="text-muted-zinc mt-1">' + email + '</p>' +
-                    '<p class="text-on-surface-variant dark:text-inverse-on-surface/70 mt-2 max-w-sm mx-auto">' + bio + '</p>' +
+                    '<h1 class="text-headline-lg-mobile font-headline-lg-mobile text-on-surface dark:text-inverse-on-surface break-words">' + name + '</h1>' +
+                    '<p class="text-muted-zinc mt-1 break-words">' + email + '</p>' +
+                    '<p class="text-on-surface-variant dark:text-inverse-on-surface/70 mt-2 max-w-sm mx-auto break-words overflow-hidden px-2">' + bio + '</p>' +
                 '</section>' +
                 '<section class="stagger-reveal grid grid-cols-4 gap-3" style="animation-delay: 0.2s;">' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10">' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
                         '<p class="text-headline-md font-headline-md text-primary">' + postsCount + '</p>' +
-                        '<p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest mt-1">Posts</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Posts</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10">' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
                         '<p class="text-headline-md font-headline-md text-primary">' + followers + '</p>' +
-                        '<p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest mt-1">Followers</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Followers</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10">' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
                         '<p class="text-headline-md font-headline-md text-primary">' + following + '</p>' +
-                        '<p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest mt-1">Following</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Following</p>' +
                     '</div>' +
-                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10">' +
+                    '<div class="bg-surface-pure dark:bg-white/5 rounded-xl p-3 text-center whisper-shadow border border-soft-border dark:border-white/10 overflow-hidden">' +
                         '<p class="text-headline-md font-headline-md text-tertiary">' + checkinsCount + '</p>' +
-                        '<p class="text-technical-label font-technical-label text-muted-zinc uppercase tracking-widest mt-1">Check-ins</p>' +
+                        '<p class="text-[10px] font-bold text-muted-zinc uppercase tracking-wider mt-1">Check-ins</p>' +
                     '</div>' +
                 '</section>' +
                 '<section class="stagger-reveal" style="animation-delay: 0.3s;">' +

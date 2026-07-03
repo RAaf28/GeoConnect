@@ -18,3 +18,7 @@ web-build/
 *.swo
 .DS_Store
 .firebase.js
+googleService-Info.plist
+.app.json
+/android
+/ios

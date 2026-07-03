@@ -122,7 +122,7 @@ App.js
    └─ RootNavigator
       └─ AppStack (authenticated)
          └─ Stack.Screen "Privacy"
-            └─ PrivacySettingsScreen ⭐ (Fitur 4 — A1)
+            └─ PrivacySettingsScreen
                ├─ SafeAreaView
                └─ ScrollView
                   ├─ Header

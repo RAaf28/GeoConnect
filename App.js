@@ -193,21 +193,25 @@ const AppStack = () => (
     <Stack.Screen
       name="Profile"
       component={ProfileScreen}
-      options={({ navigation }) => ({
-        animation: "slide_from_right",
-        headerShown: true,
-        headerTitle: 'Profile',
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => navigation.navigate('EditProfile')}
-            style={{ padding: 16 }}
-          >
-            <Text style={{ color: '#4648d4', fontWeight: '600', fontSize: 16 }}>
-              Edit
-            </Text>
-          </TouchableOpacity>
-        ),
-      })}
+      options={({ route, navigation }) => {
+        const { userId, isOwnProfile } = route.params || {};
+        const showEdit = !userId || isOwnProfile;
+        return {
+          animation: "slide_from_right",
+          headerShown: true,
+          headerTitle: 'Profile',
+          headerRight: showEdit ? () => (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditProfile')}
+              style={{ padding: 16 }}
+            >
+              <Text style={{ color: '#4648d4', fontWeight: '600', fontSize: 16 }}>
+                Edit
+              </Text>
+            </TouchableOpacity>
+          ) : null,
+        };
+      }}
     />
     <Stack.Screen
       name="EditProfile"

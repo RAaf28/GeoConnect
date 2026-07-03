@@ -25,7 +25,7 @@ export default function NearbyPeopleScreen({ navigation }) {
       const map = {};
       for (const person of nearbyPeople) {
         try {
-          const followed = await isFollowing(person.id, user.uid);
+          const followed = await isFollowing(user.uid, person.id);
           map[person.id] = followed;
         } catch (e) {
           console.error('Error checking follow status', e);
@@ -41,9 +41,9 @@ export default function NearbyPeopleScreen({ navigation }) {
     if (!user) return;
     try {
       if (currentlyFollowing) {
-        await unfollowUser(personId, user.uid);
+        await unfollowUser(user.uid, personId);
       } else {
-        await followUser(personId, user.uid);
+        await followUser(user.uid, personId);
       }
       setFollowingMap(prev => ({ ...prev, [personId]: !currentlyFollowing }));
     } catch (err) {
@@ -75,7 +75,11 @@ export default function NearbyPeopleScreen({ navigation }) {
         renderItem={({ item }) => {
           const isFollowed = followingMap[item.id] ?? false;
           return (
-            <View style={styles.item}>
+            <TouchableOpacity 
+              style={styles.item}
+              onPress={() => navigation.navigate('Profile', { userId: item.id })}
+              activeOpacity={0.7}
+            >
               {item.authorPhoto ? (
                 <Image source={{ uri: item.authorPhoto }} style={styles.avatar} />
               ) : (
@@ -97,6 +101,7 @@ export default function NearbyPeopleScreen({ navigation }) {
                   isFollowed && styles.followedButton,
                 ]}
                 onPress={() => handleFollowToggle(item.id, isFollowed)}
+                activeOpacity={0.8}
               >
                 <Text style={[
                   styles.followText,
@@ -105,7 +110,7 @@ export default function NearbyPeopleScreen({ navigation }) {
                   {isFollowed ? 'Following' : 'Follow'}
                 </Text>
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           );
         }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}

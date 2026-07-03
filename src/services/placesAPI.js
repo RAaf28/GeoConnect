@@ -80,12 +80,12 @@ const MOCK_PLACES = [
   },
 ];
 
-export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") => {
+export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", searchQuery = "") => {
   // If a valid Google Places API Key is present, try loading from Google
   if (GOOGLE_PLACES_API_KEY && GOOGLE_PLACES_API_KEY !== "your_google_maps_api_key_here") {
     try {
       if (__DEV__) {
-        console.log(`[PlacesAPI] Fetching real Google Places for category: ${category}`);
+        console.log(`[PlacesAPI] Fetching real Google Places for category: ${category}, query: ${searchQuery}`);
       }
       const typeMap = {
         Cafe: "cafe",
@@ -94,7 +94,11 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") =>
         Culture: "museum|art_gallery",
       };
       const type = typeMap[category] || "establishment";
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=${type}&key=${GOOGLE_PLACES_API_KEY}`;
+      
+      const url = searchQuery 
+        ? `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&location=${latitude},${longitude}&radius=5000&key=${GOOGLE_PLACES_API_KEY}`
+        : `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=5000&type=${type}&key=${GOOGLE_PLACES_API_KEY}`;
+      
       const response = await axios.get(url);
 
       if (response.data.status === "OK" || response.data.status === "ZERO_RESULTS") {
@@ -116,10 +120,10 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") =>
             id: place.place_id || `place_${idx}`,
             name: place.name,
             category: category,
-            description: place.vicinity || "Establishment",
+            description: place.formatted_address || place.vicinity || "Establishment",
             rating: place.rating || 4.5,
             reviewsCount: place.user_ratings_total || 10,
-            address: place.vicinity || "Nearby Area",
+            address: place.formatted_address || place.vicinity || "Nearby Area",
             image: image,
             latitude: place.geometry.location.lat,
             longitude: place.geometry.location.lng,
@@ -127,13 +131,56 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe") =>
           };
         });
       }
-      console.warn(`[PlacesAPI] Google Places API returned status: ${response.data.status}. Falling back to mock data.`);
+      console.warn(`[PlacesAPI] Google Places API returned status: ${response.data.status}. Falling back to OpenStreetMap Nominatim API.`);
     } catch (error) {
       console.error("[PlacesAPI] Google Places API call failed:", error.message);
     }
   }
 
-  // Fallback to mock places database relative to the user's location
+  // Fallback 1: OpenStreetMap Nominatim API (returns actual map places)
+  try {
+    if (__DEV__) {
+      console.log(`[PlacesAPI] Fetching from OpenStreetMap Nominatim for category: ${category}, query: ${searchQuery}`);
+    }
+    const queryTerm = searchQuery ? `${searchQuery} ${category}` : category;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryTerm)}&lat=${latitude}&lon=${longitude}&bounded=1&viewbox=${longitude - 0.15},${latitude + 0.15},${longitude + 0.15},${latitude - 0.15}`;
+    
+    const response = await axios.get(url, {
+      headers: { 'User-Agent': 'GeoConnectMobileApp/1.0' }
+    });
+
+    if (response.data && response.data.length > 0) {
+      const results = response.data || [];
+      return results.slice(0, 20).map((place, idx) => {
+        const placeLat = parseFloat(place.lat);
+        const placeLng = parseFloat(place.lon);
+        const distance = calculateDistance(latitude, longitude, placeLat, placeLng);
+        
+        // Pick a nice name from Nominatim displayName
+        const displayNameParts = place.display_name.split(',');
+        const placeName = place.name || displayNameParts[0];
+        const address = displayNameParts.slice(1).join(',').trim() || place.display_name;
+
+        return {
+          id: String(place.place_id || `osm_${idx}`),
+          name: placeName,
+          category: category,
+          description: place.display_name,
+          rating: 4.5,
+          reviewsCount: 15,
+          address: address,
+          image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500",
+          latitude: placeLat,
+          longitude: placeLng,
+          distance: distance,
+        };
+      });
+    }
+  } catch (osmError) {
+    console.error("[PlacesAPI] OpenStreetMap Nominatim API fallback failed:", osmError.message);
+  }
+
+  // Fallback 2: Mock places database relative to the user's location
   if (__DEV__) {
     console.log(`[PlacesAPI] Returning relative mock places for category: ${category}`);
   }

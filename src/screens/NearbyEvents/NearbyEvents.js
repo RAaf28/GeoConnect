@@ -104,7 +104,7 @@ const getHtmlContent = (isDark) => {
                 const name = u.displayName || 'Explorer';
                 const shortName = name.length > 10 ? name.substring(0, 10) + '.' : name;
                 const avatarHtml = photo ? '<img alt="' + name + '" class="w-full h-full object-cover rounded-full" src="' + photo + '">' : '<div class="w-full h-full rounded-full bg-primary flex items-center justify-center text-white font-bold text-xl">' + name.charAt(0) + '</div>';
-                return '<div class="flex-shrink-0 w-32 group">' +
+                return '<div class="flex-shrink-0 w-32 group cursor-pointer" onclick="openProfile(\\'' + u.id + '\\')">' +
                     '<div class="relative mb-2">' +
                         '<div class="w-24 h-24 mx-auto rounded-full p-1 border-2 border-primary/20 overflow-hidden bg-surface-pure dark:bg-white/5 group-hover:scale-105 transition-transform duration-300">' + avatarHtml + '</div>' +
                         '<div class="absolute top-1 right-5 w-3 h-3 bg-green-500 border-2 border-white dark:border-inverse-surface rounded-full"></div>' +
@@ -131,12 +131,12 @@ const getHtmlContent = (isDark) => {
                 const imgHtml = img ? '<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="' + img + '">' : '<div class="w-full h-full bg-primary/10 flex items-center justify-center"><span class="material-symbols-outlined text-primary text-5xl">event</span></div>';
 
                 return '<div class="stagger-card bg-surface-pure dark:bg-white/5 rounded-2xl overflow-hidden whisper-shadow border border-soft-border dark:border-white/10 group" style="animation-delay: ' + (idx * 0.1) + 's;">' +
-                    '<div class="relative h-48 overflow-hidden">' + imgHtml +
+                    '<div class="relative h-48 overflow-hidden cursor-pointer" onclick="openEvent(\\'' + evt.id + '\\')">' + imgHtml +
                         '<div class="absolute top-4 left-4 bg-primary text-on-primary px-3 py-1 rounded-lg text-technical-label font-technical-label shadow-lg">' + dateStr + '</div>' +
                         '<div class="absolute bottom-4 right-4 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-primary flex items-center gap-1"><span class="material-symbols-outlined text-sm">group</span> ' + going + ' Going</div>' +
                     '</div>' +
                     '<div class="p-5 space-y-3">' +
-                        '<div><h3 class="text-headline-md text-lg text-on-surface dark:text-inverse-on-surface leading-tight">' + title + '</h3>' +
+                        '<div class="cursor-pointer" onclick="openEvent(\\'' + evt.id + '\\')"><h3 class="text-headline-md text-lg text-on-surface dark:text-inverse-on-surface leading-tight">' + title + '</h3>' +
                         '<p class="text-body-md text-muted-zinc flex items-center gap-1 mt-1"><span class="material-symbols-outlined text-xs">location_on</span> ' + location + '</p></div>' +
                         '<div class="flex gap-3 pt-2">' +
                             '<button onclick="rsvpEvent(\\'' + evt.id + '\\', \\'going\\')" class="flex-1 bg-primary text-on-primary py-2.5 rounded-xl font-bold text-sm hover:bg-primary-container transition-all active:-translate-y-px">Going</button>' +
@@ -149,6 +149,14 @@ const getHtmlContent = (isDark) => {
 
         function rsvpEvent(eventId, status) {
             window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'rsvpEvent', eventId: eventId, status: status }));
+        }
+
+        function openEvent(eventId) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'openEvent', eventId: eventId }));
+        }
+
+        function openProfile(userId) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ action: 'openProfile', userId: userId }));
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -227,6 +235,9 @@ export default function NearbyEvents({ navigation }) {
       }
       else if (data.action === 'openEvent') {
         navigation.navigate('EventDetail', { eventId: data.eventId });
+      }
+      else if (data.action === 'openProfile') {
+        navigation.navigate('Profile', { userId: data.userId });
       }
     } catch (error) {
       console.error('[NearbyEvents] Error handling message:', error);

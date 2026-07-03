@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore } from '../../store/stores';
-import { getUserProfile, getUserPosts, getUserCheckins } from '../../services/firestoreService';
+import { getUserProfile, getUserPosts, getUserCheckins, followUser, unfollowUser, isFollowing } from '../../services/firestoreService';
 
 const getHtmlContent = (isDark) => {
   return `<!DOCTYPE html><html class="${isDark ? 'dark' : 'light'}" lang="en"><head>
@@ -71,7 +71,7 @@ const getHtmlContent = (isDark) => {
 <span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
 </div>
 <div class="flex items-center gap-3">
-<button onclick="window.ReactNativeWebView.postMessage(JSON.stringify({action:'openSettings'}))" class="p-2 rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
+<button id="settingsBtn" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({action:'openSettings'}))" class="p-2 rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors" style="display: none;">
 <span class="material-symbols-outlined text-on-surface-variant dark:text-inverse-on-surface">settings</span>
 </button>
 </div>
@@ -89,6 +89,17 @@ const getHtmlContent = (isDark) => {
             const container = document.getElementById('profileContent');
             const loading = document.getElementById('profileLoading');
             if (loading) loading.remove();
+
+            // Toggle Settings icon visibility in the header
+            const settingsBtn = document.getElementById('settingsBtn');
+            if (settingsBtn) {
+                if (profile.isOwnProfile) {
+                    settingsBtn.style.display = 'block';
+                } else {
+                    settingsBtn.style.display = 'none';
+                }
+            }
+
             const name = profile.displayName || 'Explorer';
             const email = profile.email || '';
             const bio = profile.bio || 'GeoConnect Explorer';
@@ -99,11 +110,21 @@ const getHtmlContent = (isDark) => {
             const checkinsCount = profile.checkinsCount || 0;
             const avatarImg = photo ? '<img alt="' + name + '" class="w-full h-full object-cover" src="' + photo + '">' : '<div class="w-full h-full bg-primary flex items-center justify-center text-white text-3xl font-bold">' + name.charAt(0) + '</div>';
 
+            let actionBtnHtml = '';
+            if (!profile.isOwnProfile) {
+                const btnText = profile.isFollowing ? 'Following' : 'Follow';
+                const btnClass = profile.isFollowing 
+                    ? 'bg-zinc-200 dark:bg-white/10 text-on-surface-variant dark:text-inverse-on-surface border border-soft-border dark:border-white/10' 
+                    : 'bg-primary text-on-primary';
+                actionBtnHtml = '<div class="mt-4 flex justify-center"><button id="followBtn" onclick="toggleFollow(\\'' + profile.id + '\\', ' + profile.isFollowing + ')" class="px-8 py-2 rounded-full font-bold text-sm transition-all active:scale-[0.98] shadow-sm ' + btnClass + '">' + btnText + '</button></div>';
+            }
+
             container.innerHTML =
                 '<section class="stagger-reveal text-center mb-8" style="animation-delay: 0.1s;">' +
                     '<div class="w-28 h-28 mx-auto rounded-full overflow-hidden border-4 border-primary/20 mb-4 shadow-sm">' + avatarImg + '</div>' +
                     '<h1 class="text-3xl font-bold font-headline-lg-mobile text-on-surface dark:text-inverse-on-surface break-words tracking-tight leading-tight">' + name + '</h1>' +
                     '<p class="text-muted-zinc mt-1 break-words font-medium text-sm">' + email + '</p>' +
+                    actionBtnHtml +
                     '<div class="mt-4 flex justify-center"><p class="text-on-surface-variant dark:text-inverse-on-surface/80 max-w-xs break-words px-4 leading-relaxed">' + bio + '</p></div>' +
                 '</section>' +
                 '<section class="stagger-reveal grid grid-cols-4 gap-2 mb-8 px-1" style="animation-delay: 0.2s;">' +
@@ -146,14 +167,26 @@ const getHtmlContent = (isDark) => {
             }).join('');
         }
 
+        function toggleFollow(userId, isCurrentlyFollowing) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'toggleFollow',
+                userId: userId,
+                isFollowing: isCurrentlyFollowing
+            }));
+        }
+
         // Profile data is injected from React Native once ready
     </script>
 </body></html>`;
 };
 
-export default function Profile({ navigation }) {
+export default function Profile({ route, navigation }) {
+  const { userId } = route.params || {};
   const { user } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
+  
+  const targetUserId = userId || user?.uid;
+  const isOwnProfile = !userId || userId === user?.uid;
   const webViewRef = useRef(null);
   const webViewReadyRef = useRef(false);
   const [cachedData, setCachedData] = useState(null);
@@ -179,9 +212,10 @@ export default function Profile({ navigation }) {
   }, []);
 
   const fetchProfileData = useCallback(async () => {
-    if (!user) {
+    const activeUserId = targetUserId;
+    if (!activeUserId) {
       webViewRef.current?.injectJavaScript(`
-        document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">person_off</span><p class="text-muted-zinc">Please log in to view your profile</p></div>';
+        document.getElementById('profileContent').innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-primary text-3xl">person_off</span><p class="text-muted-zinc">Profile identifier is missing or user is not logged in.</p></div>';
         true;
       `);
       return null;
@@ -193,26 +227,34 @@ export default function Profile({ navigation }) {
 
     const [profile, posts, checkins] = await Promise.race([
       Promise.all([
-        getUserProfile(user.uid),
-        getUserPosts(user.uid, 30),
-        getUserCheckins(user.uid),
+        getUserProfile(activeUserId),
+        getUserPosts(activeUserId, 30),
+        getUserCheckins(activeUserId),
       ]),
       timeoutPromise,
     ]);
 
+    let followingStatus = false;
+    if (user && !isOwnProfile) {
+      followingStatus = await isFollowing(user.uid, activeUserId);
+    }
+
     const profileData = {
-      displayName: user.displayName || profile?.displayName || 'Explorer',
-      email: user.email || '',
+      id: activeUserId,
+      displayName: profile?.displayName || 'Explorer',
+      email: isOwnProfile ? (user?.email || profile?.email || '') : (profile?.email || ''),
       bio: profile?.bio || 'GeoConnect Explorer ✨',
-      photoURL: user.photoURL || profile?.photoURL || '',
+      photoURL: profile?.photoURL || '',
       followersCount: profile?.followersCount || 0,
       followingCount: profile?.followingCount || 0,
       postsCount: posts.length,
-      checkinsCount: checkins.length,
+      checkinsCount: checkins?.length || 0,
+      isOwnProfile,
+      isFollowing: followingStatus,
     };
 
     return { profileData, posts };
-  }, [user]);
+  }, [targetUserId, user, isOwnProfile]);
 
   // Prefetch profile data as soon as the screen mounts
   useEffect(() => {
@@ -262,6 +304,24 @@ export default function Profile({ navigation }) {
       }
       else if (data.action === 'openPost') {
         navigation.navigate('PostDetail', { postId: data.postId });
+      }
+      else if (data.action === 'toggleFollow') {
+        if (!user) return;
+        try {
+          if (data.isFollowing) {
+            await unfollowUser(user.uid, data.userId);
+          } else {
+            await followUser(user.uid, data.userId);
+          }
+          // Refetch profile data to update UI counters and follow status
+          const result = await fetchProfileData();
+          if (result) {
+            setCachedData(result);
+            injectProfileData(result.profileData, result.posts);
+          }
+        } catch (error) {
+          console.error('[Profile] Error toggling follow status:', error);
+        }
       }
     } catch (error) {
       console.error('[Profile] Error handling message:', error);

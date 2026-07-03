@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, useLocationStore } from '../../store/stores';
@@ -117,7 +118,7 @@ export default function CreatePost({ navigation }) {
   }, []);
 
   // Load nearby places for the picker
-  const loadPlaces = useCallback(async (category) => {
+  const loadPlaces = useCallback(async (category, query = '') => {
     if (!currentLocation) {
       Alert.alert('Location Unavailable', 'Unable to determine your location for place tagging.');
       return;
@@ -128,7 +129,8 @@ export default function CreatePost({ navigation }) {
       const results = await getNearbyPlaces(
         currentLocation.latitude,
         currentLocation.longitude,
-        category
+        category,
+        query
       );
       setPlaces(results);
     } catch (error) {
@@ -139,11 +141,21 @@ export default function CreatePost({ navigation }) {
     }
   }, [currentLocation]);
 
+  // Dynamically load places based on search query, category, or picker visibility
+  useEffect(() => {
+    if (!currentLocation || !showPlacePicker) return;
+
+    const delayDebounce = setTimeout(() => {
+      loadPlaces(selectedCategory, placeSearchQuery);
+    }, 500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [placeSearchQuery, selectedCategory, currentLocation, showPlacePicker, loadPlaces]);
+
   // Open place picker
   const handleOpenPlacePicker = useCallback(() => {
     setShowPlacePicker(true);
-    loadPlaces(selectedCategory);
-  }, [loadPlaces, selectedCategory]);
+  }, []);
 
   // Select a place
   const handleSelectPlace = useCallback((place) => {
@@ -154,8 +166,7 @@ export default function CreatePost({ navigation }) {
   // Change category in place picker
   const handleCategoryChange = useCallback((category) => {
     setSelectedCategory(category);
-    loadPlaces(category);
-  }, [loadPlaces]);
+  }, []);
 
   // Remove selected place
   const handleRemovePlace = useCallback(() => {
@@ -348,12 +359,17 @@ export default function CreatePost({ navigation }) {
                   style={styles.editImageButton}
                   onPress={handlePickImage}
                 >
-                  <Text style={styles.editImageIcon}>✏️</Text>
+                  <Ionicons name="pencil" size={16} color="#ffffff" />
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.imagePlaceholder}>
-                <Text style={styles.imagePlaceholderIcon}>📸</Text>
+                <Ionicons
+                  name="camera-outline"
+                  size={40}
+                  color={isDark ? 'rgba(255,255,255,0.4)' : '#64748B'}
+                  style={{ marginBottom: 4 }}
+                />
                 <Text style={[styles.imagePlaceholderTitle, isDark && styles.textMuted]}>
                   Tap to add a photo
                 </Text>
@@ -371,18 +387,34 @@ export default function CreatePost({ navigation }) {
               onPress={() => setIsCreatingEvent(false)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.toggleButtonText, !isCreatingEvent && styles.toggleButtonTextActive]}>
-                📝 Post
-              </Text>
+              <View style={styles.toggleButtonContent}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={16}
+                  color={!isCreatingEvent ? '#ffffff' : (isDark ? 'rgba(255,255,255,0.5)' : '#64748B')}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.toggleButtonText, !isCreatingEvent && styles.toggleButtonTextActive]}>
+                  Post
+                </Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleButton, isCreatingEvent && styles.toggleButtonActive]}
               onPress={() => setIsCreatingEvent(true)}
               activeOpacity={0.7}
             >
-              <Text style={[styles.toggleButtonText, isCreatingEvent && styles.toggleButtonTextActive]}>
-                🎉 Event
-              </Text>
+              <View style={styles.toggleButtonContent}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={16}
+                  color={isCreatingEvent ? '#ffffff' : (isDark ? 'rgba(255,255,255,0.5)' : '#64748B')}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.toggleButtonText, isCreatingEvent && styles.toggleButtonTextActive]}>
+                  Event
+                </Text>
+              </View>
             </TouchableOpacity>
           </View>
 
@@ -428,7 +460,10 @@ export default function CreatePost({ navigation }) {
                   onPress={() => setShowDatePicker(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>📅 TANGGAL</Text>
+                  <View style={styles.fieldLabelRow}>
+                    <Ionicons name="calendar-outline" size={12} color={isDark ? 'rgba(255,255,255,0.5)' : '#64748B'} />
+                    <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>Tanggal</Text>
+                  </View>
                   <Text style={[styles.eventFieldInput, isDark && styles.textWhite]}>
                     {eventDate.toISOString().split('T')[0]}
                   </Text>
@@ -438,7 +473,10 @@ export default function CreatePost({ navigation }) {
                   onPress={() => setShowTimePicker(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>🕐 WAKTU</Text>
+                  <View style={styles.fieldLabelRow}>
+                    <Ionicons name="time-outline" size={12} color={isDark ? 'rgba(255,255,255,0.5)' : '#64748B'} />
+                    <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>Waktu</Text>
+                  </View>
                   <Text style={[styles.eventFieldInput, isDark && styles.textWhite]}>
                     {`${String(eventTime.getHours()).padStart(2, '0')}:${String(eventTime.getMinutes()).padStart(2, '0')}`}
                   </Text>
@@ -476,7 +514,10 @@ export default function CreatePost({ navigation }) {
 
               {/* Duration Picker */}
               <View style={[styles.eventFieldContainer, isDark && styles.cardDark]}>
-                <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>⏱️ DURASI</Text>
+                <View style={styles.fieldLabelRow}>
+                  <Ionicons name="hourglass-outline" size={12} color={isDark ? 'rgba(255,255,255,0.5)' : '#64748B'} />
+                  <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>Durasi</Text>
+                </View>
                 {eventTime && formatTimeRangeDate(eventTime, eventDuration) ? (
                   <Text style={[styles.timeRangeDisplay, isDark && styles.textWhite]}>
                     {formatTimeRangeDate(eventTime, eventDuration)}
@@ -511,7 +552,10 @@ export default function CreatePost({ navigation }) {
 
               {/* Category Picker */}
               <View style={[styles.eventFieldContainer, isDark && styles.cardDark]}>
-                <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>🏷️ KATEGORI</Text>
+                <View style={styles.fieldLabelRow}>
+                  <Ionicons name="pricetag-outline" size={12} color={isDark ? 'rgba(255,255,255,0.5)' : '#64748B'} />
+                  <Text style={[styles.eventFieldLabel, isDark && styles.textDimmed]}>Kategori</Text>
+                </View>
                 <View style={styles.eventCategoryContainer}>
                   {EVENT_CATEGORIES.map((cat) => (
                     <TouchableOpacity
@@ -562,7 +606,11 @@ export default function CreatePost({ navigation }) {
             activeOpacity={0.7}
           >
             <View style={styles.locationIconContainer}>
-              <Text style={styles.locationIcon}>📍</Text>
+              <Ionicons
+                name="location"
+                size={22}
+                color={isDark ? '#6063ee' : '#4648d4'}
+              />
             </View>
             <View style={styles.locationInfo}>
               <Text style={[styles.locationTitle, isDark && styles.textWhite]}>
@@ -586,8 +634,14 @@ export default function CreatePost({ navigation }) {
           {/* Current location fallback notice */}
           {!selectedPlace && currentLocation && (
             <View style={styles.locationNotice}>
+              <Ionicons
+                name="information-circle-outline"
+                size={14}
+                color={isDark ? 'rgba(255,255,255,0.5)' : '#64748B'}
+                style={{ marginRight: 6 }}
+              />
               <Text style={[styles.locationNoticeText, isDark && styles.textDimmed]}>
-                ℹ️ Your current location will be used if no place is tagged
+                Your current location will be used if no place is tagged
               </Text>
             </View>
           )}
@@ -631,7 +685,12 @@ export default function CreatePost({ navigation }) {
 
           {/* Search Bar */}
           <View style={[styles.placeSearchContainer, isDark && styles.cardDark]}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Ionicons
+              name="search-outline"
+              size={16}
+              color={isDark ? 'rgba(255,255,255,0.4)' : '#64748B'}
+              style={styles.searchIcon}
+            />
             <TextInput
               style={[styles.placeSearchInput, isDark && styles.textWhite]}
               placeholder="Search places..."
@@ -685,7 +744,12 @@ export default function CreatePost({ navigation }) {
               contentContainerStyle={styles.placesList}
               ListEmptyComponent={() => (
                 <View style={styles.placesEmpty}>
-                  <Text style={styles.placesEmptyIcon}>🗺️</Text>
+                  <Ionicons
+                    name="map-outline"
+                    size={36}
+                    color={isDark ? 'rgba(255,255,255,0.3)' : '#cbd5e1'}
+                    style={styles.placesEmptyIcon}
+                  />
                   <Text style={[styles.placesEmptyText, isDark && styles.textDimmed]}>
                     No places found nearby
                   </Text>
@@ -706,7 +770,7 @@ export default function CreatePost({ navigation }) {
                     />
                   ) : (
                     <View style={[styles.placeImage, styles.placeImagePlaceholder]}>
-                      <Text style={styles.placeImagePlaceholderText}>📍</Text>
+                      <Ionicons name="location" size={24} color="#4648d4" />
                     </View>
                   )}
                   <View style={styles.placeInfo}>
@@ -717,7 +781,10 @@ export default function CreatePost({ navigation }) {
                       {item.address || item.description}
                     </Text>
                     <View style={styles.placeMetaRow}>
-                      <Text style={styles.placeRating}>⭐ {item.rating}</Text>
+                      <View style={styles.ratingRow}>
+                        <Ionicons name="star" size={12} color="#fbbf24" style={{ marginRight: 2 }} />
+                        <Text style={styles.placeRating}>{item.rating}</Text>
+                      </View>
                       {item.distance != null && (
                         <Text style={[styles.placeDistance, isDark && styles.textDimmed]}>
                           {item.distance < 1
@@ -748,7 +815,7 @@ export default function CreatePost({ navigation }) {
                 setShowPlacePicker(false);
               }}
             >
-              <Text style={styles.useCurrentLocationIcon}>📍</Text>
+              <Ionicons name="locate-outline" size={18} color="#ffffff" />
               <Text style={styles.useCurrentLocationText}>Use Current Location</Text>
             </TouchableOpacity>
           )}
@@ -848,29 +915,11 @@ const styles = StyleSheet.create({
     height: 350,
     borderRadius: 18,
   },
-  editImageButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editImageIcon: {
-    fontSize: 18,
-  },
   imagePlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 48,
     gap: 8,
-  },
-  imagePlaceholderIcon: {
-    fontSize: 40,
-    marginBottom: 4,
   },
   imagePlaceholderTitle: {
     fontSize: 16,
@@ -939,9 +988,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  locationIcon: {
-    fontSize: 22,
-  },
   locationInfo: {
     flex: 1,
   },
@@ -975,10 +1021,13 @@ const styles = StyleSheet.create({
   },
   locationNotice: {
     paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   locationNoticeText: {
     fontSize: 12,
     color: '#64748B',
+    flex: 1,
   },
 
   // Posting Overlay
@@ -1068,7 +1117,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(226, 232, 240, 0.5)',
   },
   searchIcon: {
-    fontSize: 16,
     marginRight: 10,
   },
   placeSearchInput: {
@@ -1142,9 +1190,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  placeImagePlaceholderText: {
-    fontSize: 24,
-  },
   placeInfo: {
     flex: 1,
   },
@@ -1196,7 +1241,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   placesEmptyIcon: {
-    fontSize: 36,
+    marginBottom: 8,
   },
   placesEmptyText: {
     fontSize: 14,
@@ -1224,9 +1269,6 @@ const styles = StyleSheet.create({
   },
   useCurrentLocationButtonDark: {
     backgroundColor: '#6063ee',
-  },
-  useCurrentLocationIcon: {
-    fontSize: 18,
   },
   useCurrentLocationText: {
     fontSize: 15,
@@ -1291,7 +1333,6 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
-    marginBottom: 8,
   },
   eventFieldInput: {
     fontSize: 15,
@@ -1393,5 +1434,19 @@ const styles = StyleSheet.create({
   },
   textDimmed: {
     color: 'rgba(255,255,255,0.35)',
+  },
+  toggleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

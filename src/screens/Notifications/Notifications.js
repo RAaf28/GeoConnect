@@ -49,6 +49,16 @@ const getHtmlContent = (isDark) => {
         .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
         .stagger-reveal { animation: staggerReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; transform: translateY(10px); }
         @keyframes staggerReveal { to { opacity: 1; transform: translateY(0); } }
+        .glass-panel { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        @keyframes delayedFadeIn {
+            0% { opacity: 0; }
+            80% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .delayed-fade {
+            animation: delayedFadeIn 1s forwards;
+            opacity: 0;
+        }
     </style>
 </head>
 <body class="bg-background dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface font-body-md min-h-screen pb-4">
@@ -62,10 +72,10 @@ const getHtmlContent = (isDark) => {
 </div>
 </header>
 
-<main class="mt-20 px-margin-page max-w-2xl mx-auto">
+<main class="pt-20 pb-4 max-w-2xl mx-auto px-margin-page min-h-screen">
 <h2 class="text-headline-lg-mobile font-headline-lg-mobile mb-4 text-on-surface dark:text-inverse-on-surface">Notifications</h2>
 <div id="notifContainer">
-    <div class="flex flex-col items-center py-16 gap-3">
+    <div id="loadingState" class="flex flex-col items-center justify-center py-20 gap-3 delayed-fade">
         <span class="material-symbols-outlined text-primary animate-spin text-3xl">progress_activity</span>
         <p class="text-muted-zinc">Loading notifications...</p>
     </div>

@@ -119,8 +119,8 @@ const AppTabs = () => (
   >
     <Tab.Screen name="Feed" component={FeedScreen} />
     <Tab.Screen name="Explore" component={ExploreMapScreen} />
-    <Tab.Screen 
-      name="Post" 
+    <Tab.Screen
+      name="Post"
       component={View} // Dummy component, since we intercept the press
       options={({ navigation }) => ({
         tabBarIcon: () => null,
@@ -191,23 +191,27 @@ const AppStack = () => (
       options={{ animation: "slide_from_right", headerShown: false }}
     />
     <Stack.Screen
-      name="Profile"
+      name="UserProfile"
       component={ProfileScreen}
-      options={({ navigation }) => ({
-        animation: "slide_from_right",
-        headerShown: true,
-        headerTitle: 'Profile',
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => navigation.navigate('EditProfile')}
-            style={{ padding: 16 }}
-          >
-            <Text style={{ color: '#4648d4', fontWeight: '600', fontSize: 16 }}>
-              Edit
-            </Text>
-          </TouchableOpacity>
-        ),
-      })}
+      options={({ route, navigation }) => {
+        const { userId, isOwnProfile } = route.params || {};
+        const showEdit = !userId || isOwnProfile;
+        return {
+          animation: "slide_from_right",
+          headerShown: true,
+          headerTitle: 'Profile',
+          headerRight: showEdit ? () => (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('EditProfile')}
+              style={{ padding: 16 }}
+            >
+              <Text style={{ color: '#4648d4', fontWeight: '600', fontSize: 16 }}>
+                Edit
+              </Text>
+            </TouchableOpacity>
+          ) : null,
+        };
+      }}
     />
     <Stack.Screen
       name="EditProfile"

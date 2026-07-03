@@ -177,11 +177,13 @@ export default function PostDetailScreen({ route, navigation }) {
         <View style={styles.postCard}>
           <View style={styles.postHeader}>
             <View style={styles.authorRow}>
-              <TouchableOpacity onPress={() => {}}>
+              <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: post.authorId })}>
                 <Image source={{ uri: post.authorAvatar || "https://via.placeholder.com/40" }} style={styles.authorAvatar} />
               </TouchableOpacity>
               <View>
-                <Text style={styles.authorName}>{post.authorName}</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: post.authorId })}>
+                  <Text style={styles.authorName}>{post.authorName}</Text>
+                </TouchableOpacity>
                 <View style={styles.timeRow}>
                   <Ionicons name="time-outline" size={12} color="#64748B" />
                   <Text style={styles.timeText}>Captured {post.createdAt?.toDate ? post.createdAt.toDate().toLocaleDateString() : 'Recently'}</Text>
@@ -273,10 +275,14 @@ export default function PostDetailScreen({ route, navigation }) {
                   entering={FadeInDown.delay(index * 100).duration(400)}
                   style={styles.commentCard}
                 >
-                  <Image source={{ uri: comment.authorAvatar || "https://via.placeholder.com/40" }} style={styles.commentAvatar} />
+                  <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: comment.authorId })}>
+                    <Image source={{ uri: comment.authorAvatar || "https://via.placeholder.com/40" }} style={styles.commentAvatar} />
+                  </TouchableOpacity>
                   <View style={styles.commentContent}>
                     <View style={styles.commentHeaderRow}>
-                      <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                      <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: comment.authorId })}>
+                        <Text style={styles.commentAuthor}>{comment.authorName}</Text>
+                      </TouchableOpacity>
                       <Text style={styles.commentTime}>
                         {typeof comment.createdAt === "string" 
                           ? comment.createdAt 

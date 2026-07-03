@@ -109,8 +109,18 @@ const getHtmlContent = (isDark) => {
         .dark body { background-color: #1b1b23; color: #f2effb; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .glass-panel { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-        .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
-        .post-card-stagger { animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        @keyframes delayedFadeIn {
+            0% { opacity: 0; }
+            80% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .delayed-fade {
+            animation: delayedFadeIn 1s forwards;
+            opacity: 0;
+        }
+        .whisper-shadow {
+            box-shadow: 0 4px 20px -4px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.02);
+        }.post-card-stagger { animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -131,9 +141,13 @@ const getHtmlContent = (isDark) => {
 <span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
 </div>
 <div class="flex items-center gap-4">
-<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
-<span class="material-symbols-outlined text-on-surface-variant dark:text-inverse-on-surface">search</span>
-</button>
+  <div id="searchContainer" class="hidden items-center bg-surface-container-low dark:bg-white/5 rounded-full px-3 py-1.5 border border-soft-border dark:border-white/10">
+    <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="Search posts..." class="bg-transparent border-none text-xs text-on-surface dark:text-inverse-on-surface focus:ring-0 w-32 p-0">
+    <button onclick="toggleSearch(false)" class="text-muted-zinc hover:text-primary transition-colors flex items-center"><span class="material-symbols-outlined text-sm">close</span></button>
+  </div>
+  <button id="searchTriggerBtn" onclick="toggleSearch(true)" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
+    <span class="material-symbols-outlined text-on-surface-variant dark:text-inverse-on-surface">search</span>
+  </button>
 </div>
 </header>
 <!-- Main Content Area -->
@@ -149,7 +163,7 @@ const getHtmlContent = (isDark) => {
 </div>
 <!-- Post List -->
 <div id="feedContainer" class="space-y-6">
-    <div class="flex flex-col items-center py-16 gap-4">
+    <div class="flex flex-col items-center py-16 gap-4 delayed-fade">
         <div class="flex gap-1.5">
             <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0s;"></div>
             <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0.15s;"></div>
@@ -182,16 +196,67 @@ const getHtmlContent = (isDark) => {
             return diffD + 'd ago';
         }
 
+        let allPosts = [];
+        let searchQuery = '';
+
         function renderPosts(posts) {
+            allPosts = posts;
+            applySearchAndRender();
+        }
+
+        function toggleSearch(show) {
+            const container = document.getElementById('searchContainer');
+            const trigger = document.getElementById('searchTriggerBtn');
+            const input = document.getElementById('searchInput');
+            if (show) {
+                container.classList.remove('hidden');
+                container.classList.add('flex');
+                trigger.classList.add('hidden');
+                input.focus();
+            } else {
+                container.classList.remove('flex');
+                container.classList.add('hidden');
+                trigger.classList.remove('hidden');
+                input.value = '';
+                searchQuery = '';
+                applySearchAndRender();
+            }
+        }
+
+        function handleSearch(query) {
+            searchQuery = query.toLowerCase();
+            applySearchAndRender();
+        }
+
+        function applySearchAndRender() {
             const container = document.getElementById('feedContainer');
-            if (!posts || posts.length === 0) {
-                container.innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-muted-zinc text-4xl">dynamic_feed</span><p class="text-on-surface-variant dark:text-inverse-on-surface font-bold text-lg">No posts yet</p><p class="text-muted-zinc text-sm">Be the first to share something!</p></div>';
+            let filtered = allPosts;
+            if (searchQuery.trim() !== '') {
+                filtered = allPosts.filter(post => {
+                    const caption = (post.caption || '').toLowerCase();
+                    const title = (post.title || '').toLowerCase();
+                    const description = (post.description || '').toLowerCase();
+                    const author = (post.authorName || '').toLowerCase();
+                    const location = (post.locationLabel || '').toLowerCase();
+                    const category = (post.category || '').toLowerCase();
+                    return caption.includes(searchQuery) ||
+                           title.includes(searchQuery) ||
+                           description.includes(searchQuery) ||
+                           author.includes(searchQuery) ||
+                           location.includes(searchQuery) ||
+                           category.includes(searchQuery);
+                });
+            }
+
+            if (!filtered || filtered.length === 0) {
+                container.innerHTML = '<div class="flex flex-col items-center py-16 gap-3"><span class="material-symbols-outlined text-muted-zinc text-4xl">search_off</span><p class="text-on-surface-variant dark:text-inverse-on-surface font-bold text-lg">No matches found</p><p class="text-muted-zinc text-sm">Try searching for different keywords</p></div>';
                 return;
             }
 
-            container.innerHTML = posts.map((post, idx) => {
+            container.innerHTML = filtered.map((post, idx) => {
                 const authorName = post.authorName || 'Explorer';
                 const authorPhoto = post.authorPhoto || '';
+                const authorId = post.authorId || post.creatorId || '';
                 const locationLabel = post.locationLabel || '';
                 const timeAgo = formatTimeAgo(post.createdAt);
                 const likeCount = post.likesCount || 0;
@@ -204,9 +269,9 @@ const getHtmlContent = (isDark) => {
                 const avatarImg = authorPhoto ? '<img alt="' + authorName + '" class="w-full h-full rounded-full object-cover" src="' + authorPhoto + '">' : '<div class="w-full h-full rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">' + (authorName.charAt(0) || 'E') + '</div>';
                 const locationHtml = locationLabel ? '<span class="material-symbols-outlined text-[14px] text-primary">location_on</span><span class="text-technical-label font-technical-label text-primary">' + locationLabel + '</span><span class="text-[10px] text-muted-zinc">•</span>' : '';
 
-                return '<article class="post-card-stagger bg-surface-pure dark:bg-inverse-surface rounded-xl overflow-hidden whisper-shadow border border-soft-border dark:border-white/10 group transition-all hover:-translate-y-px duration-300" style="animation-delay: ' + (idx * 0.1) + 's;">' +
+                return '<article class="post-card-stagger bg-surface-pure dark:bg-inverse-surface rounded-xl overflow-hidden whisper-shadow border border-soft-border dark:border-white/10 group transition-all hover:-translate-y-px duration-300" style="animation-delay: ' + (idx * 0.05) + 's;">' +
                     '<div class="p-4 flex items-center justify-between">' +
-                        '<div class="flex items-center gap-3">' +
+                        '<div class="flex items-center gap-3 cursor-pointer" onclick="openProfile(\\'' + authorId + '\\')">' +
                             '<div class="w-10 h-10 rounded-full border-2 border-primary/20 p-0.5">' + avatarImg + '</div>' +
                             '<div>' +
                                 '<h3 class="font-headline-md text-[15px] leading-tight text-on-surface dark:text-inverse-on-surface">' + authorName + '</h3>' +
@@ -237,8 +302,8 @@ const getHtmlContent = (isDark) => {
                         '</div>' +
                         '<div class="space-y-1">' +
                             (post.type === 'event' 
-                                ? '<div class="mb-2"><span class="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider mb-1">' + (post.category || 'Event') + '</span><h4 class="font-headline-md text-[16px] leading-tight text-on-surface dark:text-inverse-on-surface">' + (post.title || '') + '</h4><p class="text-body-md font-body-md text-muted-zinc mt-1">' + (post.description || '') + '</p></div>' 
-                                : (post.caption ? '<p class="text-body-md font-body-md text-on-surface dark:text-inverse-on-surface"><span class="font-bold">' + authorName + '</span> ' + post.caption + '</p>' : '')
+                                ? '<div class="mb-2 cursor-pointer" onclick="openPost(\\'' + post.id + '\\')"><span class="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider mb-1">' + (post.category || 'Event') + '</span><h4 class="font-headline-md text-[16px] leading-tight text-on-surface dark:text-inverse-on-surface">' + (post.title || '') + '</h4><p class="text-body-md font-body-md text-muted-zinc mt-1">' + (post.description || '') + '</p></div>' 
+                                : (post.caption ? '<p class="text-body-md font-body-md text-on-surface dark:text-inverse-on-surface"><span class="font-bold cursor-pointer" onclick="openProfile(\\'' + authorId + '\\')">' + authorName + '</span> ' + post.caption + '</p>' : '')
                             ) +
                             (commentCount > 0 ? '<button onclick="openPost(\\'' + post.id + '\\')" class="text-technical-label font-technical-label text-muted-zinc hover:text-primary transition-colors">View all ' + commentCount + ' comments</button>' : '') +
                         '</div>' +
@@ -259,6 +324,13 @@ const getHtmlContent = (isDark) => {
             window.ReactNativeWebView.postMessage(JSON.stringify({
                 action: 'openPost',
                 postId: postId
+            }));
+        }
+
+        function openProfile(userId) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+                action: 'openProfile',
+                userId: userId
             }));
         }
 
@@ -349,10 +421,10 @@ export default function Feed({ navigation }) {
     try {
       const posts = rawPostsRef.current || [];
       const events = rawEventsRef.current || [];
-      
+
       const typedPosts = posts.map(p => ({ ...p, type: 'post' }));
       const typedEvents = events.map(e => ({ ...e, type: 'event' }));
-      
+
       let combined = [...typedPosts, ...typedEvents].sort((a, b) => {
         const timeA = a.createdAt?.seconds || 0;
         const timeB = b.createdAt?.seconds || 0;
@@ -367,7 +439,7 @@ export default function Feed({ navigation }) {
           return likesB - likesA;
         });
       }
-      
+
       const enrichedPosts = await Promise.all(
         combined.map(async (item) => {
           try {
@@ -475,7 +547,16 @@ export default function Feed({ navigation }) {
         }
       }
       else if (data.action === 'openPost') {
-        navigation.navigate('PostDetail', { postId: data.postId });
+        const posts = useFeedStore.getState().posts;
+        const post = posts.find(p => p.id === data.postId);
+        if (post && post.type === 'event') {
+          navigation.navigate('EventDetail', { eventId: data.postId });
+        } else {
+          navigation.navigate('PostDetail', { postId: data.postId });
+        }
+      }
+      else if (data.action === 'openProfile') {
+        navigation.navigate('UserProfile', { userId: data.userId });
       }
     } catch (error) {
       console.error('[Feed] Error handling message:', error);
@@ -484,9 +565,9 @@ export default function Feed({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <WebView 
+      <WebView
         ref={webViewRef}
-        source={{ html: getHtmlContent(isDark) }} 
+        source={{ html: getHtmlContent(isDark) }}
         style={styles.webview}
         originWhitelist={['*']}
         allowFileAccess={true}

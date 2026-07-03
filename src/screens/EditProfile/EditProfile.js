@@ -13,6 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useAuthStore } from '../../store/stores';
 import { updateUserProfile } from '../../services/authService';
 import { getUserProfile, updateUserProfile as updateFirestoreProfile } from '../../services/firestoreService';
+import { uploadProfilePhoto } from '../../services/storageService';
 import * as ImagePicker from 'expo-image-picker';
 import { ActivityIndicator, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,6 +24,7 @@ export default function EditProfile({ navigation }) {
   const [bio, setBio] = useState('');
   const [photoUrl, setPhotoUrl] = useState(user?.photoURL || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -67,24 +69,50 @@ export default function EditProfile({ navigation }) {
     }
 
     setIsLoading(true);
+    setUploadProgress(0);
     try {
-      // Update Firebase Auth
-      const updatedUser = await updateUserProfile(name.trim(), photoUrl || undefined);
+      let finalPhotoUrl = photoUrl || '';
 
-      // Update Firestore
+      // If the photo is a local URI, upload it to Firebase Storage first
+      // Local URIs (file://, content://, ph://) are only accessible on this device
+      // and will break when accessed from a different IP or device.
+      const isLocalUri = finalPhotoUrl && (
+        finalPhotoUrl.startsWith('file://') ||
+        finalPhotoUrl.startsWith('content://') ||
+        finalPhotoUrl.startsWith('ph://') ||
+        (finalPhotoUrl.startsWith('/') && !finalPhotoUrl.startsWith('//'))
+      );
+
+      if (isLocalUri) {
+        console.log('[EditProfile] Uploading profile photo to Firebase Storage...');
+        finalPhotoUrl = await uploadProfilePhoto(
+          user.uid,
+          finalPhotoUrl,
+          (progress) => setUploadProgress(progress)
+        );
+        console.log('[EditProfile] Upload complete. Download URL:', finalPhotoUrl);
+      }
+
+      // Update Firebase Auth with the persistent download URL
+      const updatedUser = await updateUserProfile(name.trim(), finalPhotoUrl || undefined);
+
+      // Update Firestore with the persistent download URL
       await updateFirestoreProfile(user.uid, {
         displayName: name.trim(),
         bio: bio.trim(),
-        photoURL: photoUrl || undefined,
+        photoURL: finalPhotoUrl || '',
       });
 
-      // Update auth store
+      // Update auth store so the app immediately reflects changes
       const store = useAuthStore.getState();
       store.setUser({
         ...updatedUser,
         displayName: name.trim(),
-        photoURL: photoUrl || undefined,
+        photoURL: finalPhotoUrl || '',
       });
+
+      // Update local state so UI reflects the new persistent URL
+      setPhotoUrl(finalPhotoUrl);
 
       Alert.alert('Success', 'Profile updated successfully');
       navigation.goBack();
@@ -93,6 +121,7 @@ export default function EditProfile({ navigation }) {
       Alert.alert('Error', 'Failed to update profile: ' + error.message);
     } finally {
       setIsLoading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -169,7 +198,9 @@ export default function EditProfile({ navigation }) {
                 styles.buttonText,
                 !name.trim() && styles.buttonTextDisabled,
               ]}>
-                Save Changes
+                {isLoading && uploadProgress > 0 && uploadProgress < 100
+                  ? `Uploading... ${uploadProgress}%`
+                  : 'Save Changes'}
               </Text>
             </TouchableOpacity>
 

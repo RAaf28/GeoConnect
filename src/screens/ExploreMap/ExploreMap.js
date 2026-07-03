@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useThemeStore, useMapSettingsStore, useLocationStore } from '../../store/stores';
 import { getMapViewConfig } from '../../utils/mapTheme';
@@ -93,14 +94,15 @@ const PostCard = React.memo(({ post, onPress, isDark }) => {
 });
 
 // Custom marker component for post locations
-const PostMarker = React.memo(({ post }) => {
+const PostMarker = React.memo(({ post, onPress }) => {
   if (!post.lat || !post.lng) return null;
 
   return (
     <Marker
       coordinate={{ latitude: post.lat, longitude: post.lng }}
       title={post.type === 'event' ? post.title : (post.caption?.substring(0, 40) || 'Post')}
-      description={post.authorName || 'Explorer'}
+      description={`Tap for details • ${post.authorName || 'Explorer'}`}
+      onCalloutPress={() => onPress(post.id, post.type)}
     >
       <View style={styles.markerContainer}>
         {post.imageURL ? (
@@ -111,7 +113,7 @@ const PostMarker = React.memo(({ post }) => {
           />
         ) : (
           <View style={styles.markerPlaceholder}>
-            <Text style={styles.markerPlaceholderText}>📍</Text>
+            <Ionicons name="location" size={18} color="#ffffff" />
           </View>
         )}
       </View>
@@ -325,13 +327,18 @@ export default function ExploreMap({ navigation }) {
         mapPadding={{ top: 70, right: 16, bottom: BOTTOM_SHEET_MIN + 80, left: 16 }}
       >
         {filteredPosts.map((post) => (
-          <PostMarker key={post.id} post={post} />
+          <PostMarker key={post.id} post={post} onPress={handlePostPress} />
         ))}
       </MapView>
 
       {/* Top Search Bar */}
       <View style={[styles.searchBarContainer, isDark && styles.searchBarContainerDark]}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons
+          name="search-outline"
+          size={18}
+          color={isDark ? 'rgba(255,255,255,0.5)' : 'rgba(70,69,84,0.6)'}
+          style={styles.searchIcon}
+        />
         <TextInput
           style={[styles.searchInput, isDark && styles.searchInputDark]}
           placeholder="Search GeoConnect..."
@@ -383,7 +390,11 @@ export default function ExploreMap({ navigation }) {
           }
         }}
       >
-        <Text style={styles.myLocationIcon}>📍</Text>
+        <Ionicons
+          name="locate"
+          size={20}
+          color={isDark ? '#c0c1ff' : '#4648d4'}
+        />
       </TouchableOpacity>
 
       {/* Bottom Sheet */}
@@ -417,7 +428,12 @@ export default function ExploreMap({ navigation }) {
           </View>
         ) : filteredPosts.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🗺️</Text>
+            <Ionicons
+              name="map-outline"
+              size={36}
+              color={isDark ? 'rgba(255,255,255,0.3)' : '#cbd5e1'}
+              style={styles.emptyIcon}
+            />
             <Text style={[styles.emptyText, isDark && styles.textMuted]}>
               {locationError || 'No posts found nearby'}
             </Text>
@@ -471,7 +487,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(27, 27, 35, 0.92)',
   },
   searchIcon: {
-    fontSize: 18,
     marginRight: 10,
   },
   searchInput: {
@@ -560,7 +575,7 @@ const styles = StyleSheet.create({
   myLocationButton: {
     position: 'absolute',
     right: 24,
-    bottom: BOTTOM_SHEET_MIN + 100,
+    bottom: BOTTOM_SHEET_MIN + 136,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -576,9 +591,6 @@ const styles = StyleSheet.create({
   },
   myLocationButtonDark: {
     backgroundColor: 'rgba(48, 48, 56, 0.95)',
-  },
-  myLocationIcon: {
-    fontSize: 20,
   },
 
   // Markers
@@ -608,9 +620,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4648d4',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  markerPlaceholderText: {
-    fontSize: 16,
   },
 
   // Bottom Sheet
@@ -765,7 +774,6 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
   },
   emptyIcon: {
-    fontSize: 32,
     marginBottom: 8,
   },
   emptyText: {

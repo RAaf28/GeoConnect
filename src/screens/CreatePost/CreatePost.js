@@ -588,13 +588,17 @@ export default function CreatePost({ navigation }) {
                 placeholderTextColor={isDark ? 'rgba(255,255,255,0.35)' : '#64748B'}
                 multiline
                 numberOfLines={4}
-                maxLength={500}
                 value={caption}
-                onChangeText={setCaption}
+                onChangeText={(text) => {
+                  const words = text.trim() === '' ? [] : text.trim().split(/\s+/);
+                  if (words.length <= 500 || text.length < caption.length) {
+                    setCaption(text);
+                  }
+                }}
                 textAlignVertical="top"
               />
               <Text style={[styles.charCount, isDark && styles.textDimmed]}>
-                {caption.length}/500
+                {caption.trim() === '' ? 0 : caption.trim().split(/\s+/).length}/500 kata
               </Text>
             </View>
           )}

@@ -135,21 +135,25 @@ const getHtmlContent = (isDark) => {
 </head>
 <body class="bg-background dark:bg-inverse-surface text-on-surface dark:text-inverse-on-surface">
 <!-- Top Navigation Bar -->
-<header class="fixed top-0 w-full z-50 bg-surface/90 dark:bg-inverse-surface/90 backdrop-blur-md shadow-sm px-4 pt-12 pb-3 flex flex-col gap-3" style="padding-top: env(safe-area-inset-top, 48px);">
-  <div class="flex items-center gap-2 px-1">
-    <span class="material-symbols-outlined text-primary text-[28px]">explore</span>
-    <span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
+<header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm h-16 flex justify-between items-center px-margin-page">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[28px]">explore</span>
+<span class="text-headline-md font-headline-md text-primary tracking-tight">GeoConnect</span>
+</div>
+<div class="flex items-center gap-4">
+  <div id="searchContainer" class="hidden items-center bg-surface-container-low dark:bg-white/5 rounded-full px-3 py-1.5 border border-soft-border dark:border-white/10">
+    <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="Search posts..." class="bg-transparent border-none text-xs text-on-surface dark:text-inverse-on-surface focus:ring-0 w-32 p-0">
+    <button onclick="toggleSearch(false)" class="text-muted-zinc hover:text-primary transition-colors flex items-center"><span class="material-symbols-outlined text-sm">close</span></button>
   </div>
-  <div class="w-full bg-surface-variant dark:bg-white/5 rounded-full flex items-center px-4 py-2 border border-soft-border dark:border-white/10 shadow-sm focus-within:border-primary dark:focus-within:border-[#8c8eff] transition-colors relative">
-    <span class="material-symbols-outlined text-muted-zinc mr-2 text-xl">search</span>
-    <input type="text" id="searchInput" oninput="handleSearch(this.value)" placeholder="Search posts, people, events..." class="bg-transparent border-none text-sm text-on-surface dark:text-inverse-on-surface focus:ring-0 w-full p-0" autocomplete="off" autocorrect="off" autocapitalize="none">
-    <button id="clearBtn" onclick="clearSearch()" class="hidden absolute right-4 text-muted-zinc hover:text-primary"><span class="material-symbols-outlined text-sm">close</span></button>
-  </div>
+  <button id="searchTriggerBtn" onclick="toggleSearch(true)" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant/50 dark:hover:bg-white/10 transition-colors">
+    <span class="material-symbols-outlined text-on-surface-variant dark:text-inverse-on-surface">search</span>
+  </button>
+</div>
 </header>
 <!-- Main Content Area -->
-<main class="pt-[140px] pb-4 max-w-2xl mx-auto px-4 lg:px-0">
+<main class="pt-20 pb-4 max-w-2xl mx-auto px-4 lg:px-0">
 <!-- Filter Bar -->
-<div class="sticky top-[130px] z-40 py-4 bg-background/95 dark:bg-inverse-surface/95 backdrop-blur-sm mb-2">
+<div class="sticky top-16 z-40 py-4 bg-background/95 dark:bg-inverse-surface/95 backdrop-blur-sm mb-2">
 <div class="flex items-center justify-between">
 <div class="flex gap-2 p-1 bg-surface-container-low dark:bg-white/5 rounded-full">
 <button id="tabFeed" onclick="switchTab('feed')" class="px-6 py-2 rounded-full text-technical-label font-technical-label bg-primary text-on-primary shadow-sm transition-all">Feed</button>
@@ -169,7 +173,7 @@ const getHtmlContent = (isDark) => {
     </div>
 </div>
 <!-- Pull to Refresh Indicator -->
-<div id="pullIndicator" class="fixed top-[130px] left-0 right-0 z-[60] flex justify-center transition-all duration-300 pointer-events-none" style="opacity:0; transform: translateY(-40px);">
+<div id="pullIndicator" class="fixed top-16 left-0 right-0 z-[60] flex justify-center transition-all duration-300" style="opacity:0; transform: translateY(-40px);">
     <div class="bg-primary text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
         <span class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
         <span class="text-xs font-bold">Refreshing...</span>
@@ -200,28 +204,33 @@ const getHtmlContent = (isDark) => {
             applySearchAndRender();
         }
 
-        function handleSearch(query) {
-            searchQuery = query.toLowerCase();
-            const clearBtn = document.getElementById('clearBtn');
-            if (searchQuery.length > 0) {
-                clearBtn.classList.remove('hidden');
+        function toggleSearch(show) {
+            const container = document.getElementById('searchContainer');
+            const trigger = document.getElementById('searchTriggerBtn');
+            const input = document.getElementById('searchInput');
+            if (show) {
+                container.classList.remove('hidden');
+                container.classList.add('flex');
+                trigger.classList.add('hidden');
+                input.focus();
             } else {
-                clearBtn.classList.add('hidden');
+                container.classList.remove('flex');
+                container.classList.add('hidden');
+                trigger.classList.remove('hidden');
+                input.value = '';
+                searchQuery = '';
+                applySearchAndRender();
             }
-            applySearchAndRender();
         }
 
-        function clearSearch() {
-            const input = document.getElementById('searchInput');
-            input.value = '';
-            handleSearch('');
-            input.focus();
+        function handleSearch(query) {
+            searchQuery = query.toLowerCase();
+            applySearchAndRender();
         }
 
         function applySearchAndRender() {
             const container = document.getElementById('feedContainer');
             let filtered = allPosts;
-
             if (searchQuery.trim() !== '') {
                 filtered = allPosts.filter(post => {
                     const caption = (post.caption || '').toLowerCase();
@@ -537,9 +546,6 @@ export default function Feed({ navigation }) {
           console.error('[Feed] Unlike error:', error);
         }
       }
-      if (data.action === 'openSearch') {
-        navigation.navigate('Search');
-      }
       else if (data.action === 'openPost') {
         const posts = useFeedStore.getState().posts;
         const post = posts.find(p => p.id === data.postId);
@@ -569,7 +575,6 @@ export default function Feed({ navigation }) {
         javaScriptEnabled={true}
         domStorageEnabled={true}
         onMessage={handleMessage}
-        keyboardDisplayRequiresUserAction={false}
       />
     </SafeAreaView>
   );

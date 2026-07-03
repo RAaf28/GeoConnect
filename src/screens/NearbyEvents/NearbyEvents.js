@@ -18,7 +18,9 @@ const getHtmlContent = (isDark) => {
 <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
         .whisper-shadow { box-shadow: 0 10px 30px -5px rgba(70, 72, 212, 0.08); }
-        .stagger-card { animation: slideUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; }
+        .stagger-item { animation: slideUpFade 0.4s ease-out forwards; opacity: 0; }
+        @keyframes delayedFadeIn { 0% { opacity: 0; } 80% { opacity: 0; } 100% { opacity: 1; } }
+        .delayed-fade { animation: delayedFadeIn 1s forwards; opacity: 0; }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -70,7 +72,7 @@ const getHtmlContent = (isDark) => {
 </div>
 </div>
 <div id="peopleContainer" class="flex gap-4 overflow-x-auto hide-scrollbar -mx-6 px-6 pb-4">
-    <div class="text-center text-muted-zinc py-4 w-full"><span class="material-symbols-outlined animate-spin">progress_activity</span></div>
+    <div class="text-center text-muted-zinc py-4 w-full delayed-fade"><span class="material-symbols-outlined animate-spin">progress_activity</span></div>
 </div>
 </section>
 <!-- Section: Public Events -->
@@ -78,8 +80,8 @@ const getHtmlContent = (isDark) => {
 <div class="flex justify-between items-center">
 <h2 class="text-headline-md font-headline-md text-on-surface dark:text-inverse-on-surface">Public Events</h2>
 </div>
-<div id="eventsContainer" class="grid gap-6">
-    <div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Loading events...</p></div>
+<div id="eventsList" class="space-y-4">
+    <div class="text-center text-muted-zinc py-8 delayed-fade"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Loading events...</p></div>
 </div>
 </section>
 </div>
@@ -237,7 +239,7 @@ export default function NearbyEvents({ navigation }) {
         navigation.navigate('EventDetail', { eventId: data.eventId });
       }
       else if (data.action === 'openProfile') {
-        navigation.navigate('Profile', { userId: data.userId });
+        navigation.navigate('UserProfile', { userId: data.userId });
       }
     } catch (error) {
       console.error('[NearbyEvents] Error handling message:', error);

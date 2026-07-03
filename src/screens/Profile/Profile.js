@@ -59,7 +59,16 @@ const getHtmlContent = (isDark) => {
         .stagger-reveal { animation: staggerReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; opacity: 0; transform: translateY(10px); }
         @keyframes staggerReveal { to { opacity: 1; transform: translateY(0); } }
         .css-spinner { width: 2rem; height: 2rem; border: 2px solid rgba(70, 72, 212, 0.2); border-top-color: #4648d4; border-radius: 50%; animation: cssSpin 0.7s linear infinite; }
-        @keyframes cssSpin { to { transform: rotate(360deg); } }
+        @keyframes cssSpin { 100% { transform: rotate(360deg); } }
+        @keyframes delayedFadeIn {
+            0% { opacity: 0; }
+            80% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .delayed-fade {
+            animation: delayedFadeIn 1s forwards;
+            opacity: 0;
+        }
         .break-words { overflow-wrap: break-word; word-break: break-word; }
     </style>
 </head>
@@ -78,7 +87,7 @@ const getHtmlContent = (isDark) => {
 </header>
 
 <main id="profileContent" class="mt-20 px-margin-page max-w-2xl mx-auto space-y-6">
-    <div id="profileLoading" class="flex flex-col items-center py-16 gap-3">
+    <div id="profileLoading" class="flex flex-col items-center py-16 gap-3 delayed-fade">
         <div class="css-spinner" aria-hidden="true"></div>
         <p class="text-muted-zinc text-sm">Loading profile...</p>
     </div>
@@ -184,9 +193,11 @@ export default function Profile({ route, navigation }) {
   const { userId } = route.params || {};
   const { user } = useAuth();
   const isDark = useThemeStore((state) => state.isDark);
-  
-  const targetUserId = userId || user?.uid;
-  const isOwnProfile = !userId || userId === user?.uid;
+
+  const isProfileTab = route.name === 'Profile';
+  const effectiveUserId = isProfileTab ? null : userId;
+  const targetUserId = effectiveUserId || user?.uid;
+  const isOwnProfile = !effectiveUserId || effectiveUserId === user?.uid;
   const webViewRef = useRef(null);
   const webViewReadyRef = useRef(false);
   const [cachedData, setCachedData] = useState(null);
@@ -330,9 +341,9 @@ export default function Profile({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <WebView 
+      <WebView
         ref={webViewRef}
-        source={{ html: getHtmlContent(isDark) }} 
+        source={{ html: getHtmlContent(isDark) }}
         style={styles.webview}
         originWhitelist={['*']}
         allowFileAccess={true}

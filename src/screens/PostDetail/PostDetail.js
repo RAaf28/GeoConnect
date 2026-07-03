@@ -177,11 +177,11 @@ export default function PostDetailScreen({ route, navigation }) {
         <View style={styles.postCard}>
           <View style={styles.postHeader}>
             <View style={styles.authorRow}>
-              <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: post.authorId })}>
+              <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: post.authorId })}>
                 <Image source={{ uri: post.authorAvatar || "https://via.placeholder.com/40" }} style={styles.authorAvatar} />
               </TouchableOpacity>
               <View>
-                <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: post.authorId })}>
+                <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: post.authorId })}>
                   <Text style={styles.authorName}>{post.authorName}</Text>
                 </TouchableOpacity>
                 <View style={styles.timeRow}>
@@ -275,12 +275,12 @@ export default function PostDetailScreen({ route, navigation }) {
                   entering={FadeInDown.delay(index * 100).duration(400)}
                   style={styles.commentCard}
                 >
-                  <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: comment.authorId })}>
+                  <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: comment.authorId })}>
                     <Image source={{ uri: comment.authorAvatar || "https://via.placeholder.com/40" }} style={styles.commentAvatar} />
                   </TouchableOpacity>
                   <View style={styles.commentContent}>
                     <View style={styles.commentHeaderRow}>
-                      <TouchableOpacity onPress={() => navigation.navigate('Profile', { userId: comment.authorId })}>
+                      <TouchableOpacity onPress={() => navigation.navigate('UserProfile', { userId: comment.authorId })}>
                         <Text style={styles.commentAuthor}>{comment.authorName}</Text>
                       </TouchableOpacity>
                       <Text style={styles.commentTime}>

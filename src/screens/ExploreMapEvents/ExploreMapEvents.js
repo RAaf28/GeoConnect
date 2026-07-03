@@ -49,7 +49,9 @@ const getHtmlContent = (isDark) => {
 <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; display: inline-block; vertical-align: middle; }
-        .whisper-shadow { box-shadow: 0 10px 30px -5px rgba(70, 72, 212, 0.08); }
+        .whisper-shadow { box-shadow: 0 4px 20px -4px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.02); }
+        @keyframes delayedFadeIn { 0% { opacity: 0; } 80% { opacity: 0; } 100% { opacity: 1; } }
+        .delayed-fade { animation: delayedFadeIn 1s forwards; opacity: 0; }
         .glass-panel { background: rgba(252, 248, 255, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
         .dark .glass-panel { background: rgba(27, 27, 35, 0.8); }
 
@@ -119,7 +121,7 @@ const getHtmlContent = (isDark) => {
 <div id="featuredEvent" class="fixed bottom-8 left-0 right-0 z-[1000] px-margin-page pointer-events-none">
 <div class="max-w-md mx-auto pointer-events-auto">
 <div class="glass-panel p-4 rounded-2xl whisper-shadow border border-white/50 dark:border-white/10 flex flex-col gap-3">
-<div class="text-center text-muted-zinc py-4"><span class="material-symbols-outlined animate-spin">progress_activity</span><p class="text-sm mt-1">Loading events...</p></div>
+<div class="text-center text-muted-zinc py-4 delayed-fade"><span class="material-symbols-outlined animate-spin">progress_activity</span><p class="text-sm mt-1">Loading events...</p></div>
 </div>
 </div>
 </div>

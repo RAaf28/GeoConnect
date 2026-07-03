@@ -109,8 +109,18 @@ const getHtmlContent = (isDark) => {
         .dark body { background-color: #1b1b23; color: #f2effb; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .glass-panel { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-        .whisper-shadow { box-shadow: 0 10px 30px -10px rgba(70, 72, 212, 0.08); }
-        .post-card-stagger { animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        @keyframes delayedFadeIn {
+            0% { opacity: 0; }
+            80% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        .delayed-fade {
+            animation: delayedFadeIn 1s forwards;
+            opacity: 0;
+        }
+        .whisper-shadow {
+            box-shadow: 0 4px 20px -4px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.02);
+        }.post-card-stagger { animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
@@ -153,7 +163,7 @@ const getHtmlContent = (isDark) => {
 </div>
 <!-- Post List -->
 <div id="feedContainer" class="space-y-6">
-    <div class="flex flex-col items-center py-16 gap-4">
+    <div class="flex flex-col items-center py-16 gap-4 delayed-fade">
         <div class="flex gap-1.5">
             <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0s;"></div>
             <div class="w-2 h-2 rounded-full bg-primary animate-bounce" style="animation-delay: 0.15s;"></div>
@@ -411,10 +421,10 @@ export default function Feed({ navigation }) {
     try {
       const posts = rawPostsRef.current || [];
       const events = rawEventsRef.current || [];
-      
+
       const typedPosts = posts.map(p => ({ ...p, type: 'post' }));
       const typedEvents = events.map(e => ({ ...e, type: 'event' }));
-      
+
       let combined = [...typedPosts, ...typedEvents].sort((a, b) => {
         const timeA = a.createdAt?.seconds || 0;
         const timeB = b.createdAt?.seconds || 0;
@@ -429,7 +439,7 @@ export default function Feed({ navigation }) {
           return likesB - likesA;
         });
       }
-      
+
       const enrichedPosts = await Promise.all(
         combined.map(async (item) => {
           try {
@@ -546,7 +556,7 @@ export default function Feed({ navigation }) {
         }
       }
       else if (data.action === 'openProfile') {
-        navigation.navigate('Profile', { userId: data.userId });
+        navigation.navigate('UserProfile', { userId: data.userId });
       }
     } catch (error) {
       console.error('[Feed] Error handling message:', error);
@@ -555,9 +565,9 @@ export default function Feed({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <WebView 
+      <WebView
         ref={webViewRef}
-        source={{ html: getHtmlContent(isDark) }} 
+        source={{ html: getHtmlContent(isDark) }}
         style={styles.webview}
         originWhitelist={['*']}
         allowFileAccess={true}

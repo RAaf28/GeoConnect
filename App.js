@@ -119,8 +119,8 @@ const AppTabs = () => (
   >
     <Tab.Screen name="Feed" component={FeedScreen} />
     <Tab.Screen name="Explore" component={ExploreMapScreen} />
-    <Tab.Screen 
-      name="Post" 
+    <Tab.Screen
+      name="Post"
       component={View} // Dummy component, since we intercept the press
       options={({ navigation }) => ({
         tabBarIcon: () => null,
@@ -191,7 +191,7 @@ const AppStack = () => (
       options={{ animation: "slide_from_right", headerShown: false }}
     />
     <Stack.Screen
-      name="Profile"
+      name="UserProfile"
       component={ProfileScreen}
       options={({ route, navigation }) => {
         const { userId, isOwnProfile } = route.params || {};

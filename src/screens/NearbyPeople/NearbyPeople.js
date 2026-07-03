@@ -77,7 +77,7 @@ export default function NearbyPeopleScreen({ navigation }) {
           return (
             <TouchableOpacity 
               style={styles.item}
-              onPress={() => navigation.navigate('Profile', { userId: item.id })}
+              onPress={() => navigation.navigate('UserProfile', { userId: item.id })}
               activeOpacity={0.7}
             >
               {item.authorPhoto ? (

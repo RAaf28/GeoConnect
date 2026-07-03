@@ -28,9 +28,9 @@ const getHtmlContent = (isDark) => {
             background: rgba(27, 27, 35, 0.85);
             border-color: rgba(255, 255, 255, 0.1);
         }
-        .whisper-shadow {
-            box-shadow: 0 10px 30px -5px rgba(70, 72, 212, 0.08), 0 4px 12px -2px rgba(70, 72, 212, 0.03);
-        }
+        .whisper-shadow { box-shadow: 0 4px 20px -4px rgba(0,0,0,0.05), 0 0 3px rgba(0,0,0,0.02); }
+        @keyframes delayedFadeIn { 0% { opacity: 0; } 80% { opacity: 0; } 100% { opacity: 1; } }
+        .delayed-fade { animation: delayedFadeIn 1s forwards; opacity: 0; }
         .stagger-reveal {
             animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
             opacity: 0;
@@ -208,12 +208,12 @@ const getHtmlContent = (isDark) => {
 <!-- Places Sidebar -->
 <aside class="absolute left-4 right-4 lg:right-auto lg:w-80 top-60 bottom-24 lg:bottom-margin-page flex flex-col gap-4 z-10 bg-white/85 dark:bg-inverse-surface/85 backdrop-blur-md p-4 rounded-2xl border border-soft-border dark:border-white/10 overflow-hidden shadow-xl stagger-reveal" style="animation-delay: 0.2s;">
 <h3 class="text-headline-md font-headline-md text-on-surface-variant dark:text-inverse-on-surface">Nearby Places</h3>
-<div id="placesList" class="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar">
-    <div class="text-center text-muted-zinc py-8">
+<div id="placesList" class="flex flex-col gap-4">
+        <div class="text-center text-muted-zinc py-8 delayed-fade">
         <span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
         <p class="mt-2">Loading nearby spots...</p>
+        </div>
     </div>
-</div>
 </aside>
 
 <!-- Place Detail Slide-up Sheet -->
@@ -292,7 +292,7 @@ const getHtmlContent = (isDark) => {
                 }
             });
             
-            document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Searching...</p></div>';
+            document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8 delayed-fade"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Searching...</p></div>';
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
                 action: 'loadPlaces',
@@ -310,7 +310,7 @@ const getHtmlContent = (isDark) => {
             const query = document.getElementById('searchInput').value;
             if (!query.trim()) return;
             
-            document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Searching...</p></div>';
+            document.getElementById('placesList').innerHTML = '<div class="text-center text-muted-zinc py-8 delayed-fade"><span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span><p class="mt-2">Searching...</p></div>';
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
                 action: 'searchPlaces',
@@ -359,7 +359,7 @@ const getHtmlContent = (isDark) => {
             document.getElementById('detailImage2').src = imgUrl;
             document.getElementById('detailImage3').src = imgUrl;
             
-            document.getElementById('leaderboardList').innerHTML = '<div class="text-center text-muted-zinc py-4"><span class="material-symbols-outlined animate-spin">progress_activity</span> Loading legends...</div>';
+            document.getElementById('leaderboardList').innerHTML = '<div class="text-center text-muted-zinc py-4 delayed-fade"><span class="material-symbols-outlined animate-spin">progress_activity</span> Loading legends...</div>';
             
             window.ReactNativeWebView.postMessage(JSON.stringify({
                 action: 'requestLeaderboard',

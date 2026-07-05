@@ -4,6 +4,58 @@ import { calculateDistance } from "../utils/geoUtils";
 // Changed variable name to reflect the environment variable used for Google Maps/Places API
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
+// Curated list of high-quality topic-specific images from Unsplash to use as fallbacks
+const CATEGORY_IMAGES = {
+  Cafe: [
+    "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=600&auto=format&fit=crop&q=60", // coffee cup
+    "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=600&auto=format&fit=crop&q=60", // cafe interior
+    "https://images.unsplash.com/photo-1498804103079-a6351b050096?w=600&auto=format&fit=crop&q=60", // coffee & work
+    "https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=600&auto=format&fit=crop&q=60"  // coffee beans & cup
+  ],
+  Park: [
+    "https://images.unsplash.com/photo-1502082553048-f009c37129b9?w=600&auto=format&fit=crop&q=60", // green trees
+    "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=600&auto=format&fit=crop&q=60", // sun rays trees
+    "https://images.unsplash.com/photo-1473448912268-2022ce9509d8?w=600&auto=format&fit=crop&q=60", // autumn forest
+    "https://images.unsplash.com/photo-1519331379826-f10be5486c6f?w=600&auto=format&fit=crop&q=60"  // park bench
+  ],
+  Mall: [
+    "https://images.unsplash.com/photo-1519501025264-65ba15a82390?w=600&auto=format&fit=crop&q=60", // city view
+    "https://images.unsplash.com/photo-1569058242253-92a9c755a0ec?w=600&auto=format&fit=crop&q=60", // shopping mall interior
+    "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600&auto=format&fit=crop&q=60", // shopping bags/stores
+    "https://images.unsplash.com/photo-1581428982868-e410dd047a90?w=600&auto=format&fit=crop&q=60"  // modern escalators
+  ],
+  Culture: [
+    "https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=600&auto=format&fit=crop&q=60", // museum architecture
+    "https://images.unsplash.com/photo-1531747118685-ca8fa6e08806?w=600&auto=format&fit=crop&q=60", // art gallery
+    "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?w=600&auto=format&fit=crop&q=60", // artistic painting
+    "https://images.unsplash.com/photo-1566121318599-523e65ad2cbf?w=600&auto=format&fit=crop&q=60"  // historic sculptures
+  ]
+};
+
+export const getFallbackImage = (category, name) => {
+  const catImages = CATEGORY_IMAGES[category] || CATEGORY_IMAGES.Cafe;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % catImages.length;
+  return catImages[index];
+};
+
+export const getFallbackImagesList = (category, name) => {
+  const catImages = CATEGORY_IMAGES[category] || CATEGORY_IMAGES.Cafe;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const startIdx = Math.abs(hash);
+  const result = [];
+  for (let i = 0; i < Math.min(3, catImages.length); i++) {
+    result.push(catImages[(startIdx + i) % catImages.length]);
+  }
+  return result;
+};
+
 // Mock database matching the visual theme of GeoConnect
 const MOCK_PLACES = [
   {
@@ -111,9 +163,14 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", se
             place.geometry.location.lng
           );
 
-          let image = "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500";
+          let image = getFallbackImage(category, place.name);
+          let images = getFallbackImagesList(category, place.name);
           if (place.photos && place.photos.length > 0) {
             image = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${place.photos[0].photo_reference}&key=${GOOGLE_PLACES_API_KEY}`;
+            images = place.photos.slice(0, 3).map(p => `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${p.photo_reference}&key=${GOOGLE_PLACES_API_KEY}`);
+            while (images.length < 3) {
+              images.push(image);
+            }
           }
 
           return {
@@ -125,6 +182,7 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", se
             reviewsCount: place.user_ratings_total || 10,
             address: place.formatted_address || place.vicinity || "Nearby Area",
             image: image,
+            images: images,
             latitude: place.geometry.location.lat,
             longitude: place.geometry.location.lng,
             distance: distance,
@@ -161,6 +219,9 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", se
         const placeName = place.name || displayNameParts[0];
         const address = displayNameParts.slice(1).join(',').trim() || place.display_name;
 
+        const image = getFallbackImage(category, placeName);
+        const images = getFallbackImagesList(category, placeName);
+
         return {
           id: String(place.place_id || `osm_${idx}`),
           name: placeName,
@@ -169,7 +230,8 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", se
           rating: 4.5,
           reviewsCount: 15,
           address: address,
-          image: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500",
+          image: image,
+          images: images,
           latitude: placeLat,
           longitude: placeLng,
           distance: distance,
@@ -188,6 +250,7 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", se
     const placeLat = latitude + place.latOffset;
     const placeLng = longitude + place.lngOffset;
     const distance = calculateDistance(latitude, longitude, placeLat, placeLng);
+    const images = getFallbackImagesList(place.category, place.name);
     return {
       id: place.id,
       name: place.name,
@@ -197,6 +260,7 @@ export const getNearbyPlaces = async (latitude, longitude, category = "Cafe", se
       reviewsCount: place.reviewsCount,
       address: place.address,
       image: place.image,
+      images: [place.image, ...images.slice(0, 2)],
       latitude: placeLat,
       longitude: placeLng,
       distance: distance,

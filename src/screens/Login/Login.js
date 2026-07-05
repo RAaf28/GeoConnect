@@ -13,14 +13,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Google from "expo-auth-session/providers/google";
-import * as WebBrowser from "expo-web-browser";
-import Constants from 'expo-constants';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useThemeStore } from '../../store/stores';
 import { signInWithEmail, signInWithGoogle } from '../../services/authService';
 import { getUserProfile, createUserProfile } from '../../services/firestoreService';
 
-WebBrowser.maybeCompleteAuthSession();
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+});
 
 export default function Login({ navigation }) {
   const [email, setEmail] = useState('');
@@ -39,48 +39,7 @@ export default function Login({ navigation }) {
     primary: '#4648d4',
   };
 
-  // Detect if running in Expo Go client vs standalone/development builds.
-  // In Expo Go, native client IDs will cause Google OAuth policy block because the package name (host.exp.exponent) mismatches the custom package name.
-  const isExpoGo = Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient';
-
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    androidClientId: isExpoGo ? undefined : process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: isExpoGo ? undefined : process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-  });
-
-  useEffect(() => {
-    if (response) {
-      if (response.type === 'success') {
-        const { id_token } = response.authentication;
-        (async () => {
-          setLoading(true);
-          try {
-            const authUser = await signInWithGoogle(id_token);
-            const profile = await getUserProfile(authUser.uid);
-            if (!profile) {
-              await createUserProfile(authUser.uid, {
-                displayName: authUser.displayName || 'Explorer',
-                email: authUser.email || '',
-                photoURL: authUser.photoURL || '',
-                bio: '',
-              });
-            }
-          } catch (error) {
-            Alert.alert("Google Login Error", error.message);
-          } finally {
-            setLoading(false);
-          }
-        })();
-      } else {
-        setLoading(false);
-        if (response.type === 'error') {
-          Alert.alert("Google Login Error", response.error?.message || "Authentication failed");
-        }
-      }
-    }
-  }, [response]);
+  // Removed unused web-based Expo Google Sign-In hook and effect in favor of the native Google SDK.
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -97,17 +56,43 @@ export default function Login({ navigation }) {
     }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     const webId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     if (!webId || webId === "your_web_client_id_here") {
       Alert.alert("Google Login Config Error", "Google Web Client ID is not configured in .env file.");
       return;
     }
     setLoading(true);
-    promptAsync().catch((error) => {
-      Alert.alert("Google Login Error", error.message);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken || userInfo.idToken;
+      if (!idToken) {
+        throw new Error("No ID Token returned from Google Sign-In");
+      }
+      const authUser = await signInWithGoogle(idToken);
+      const profile = await getUserProfile(authUser.uid);
+      if (!profile) {
+        await createUserProfile(authUser.uid, {
+          displayName: authUser.displayName || 'Explorer',
+          email: authUser.email || '',
+          photoURL: authUser.photoURL || '',
+          bio: '',
+        });
+      }
+    } catch (error) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled the login flow, do nothing
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        Alert.alert("Google Login", "Sign-in already in progress.");
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert("Google Play Services", "Google Play Services is not available or outdated.");
+      } else {
+        Alert.alert("Google Login Error", error.message);
+      }
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   return (

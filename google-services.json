@@ -7,15 +7,15 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:351198202919:android:b5089d2924acbd1385d202",
+        "mobilesdk_app_id": "1:351198202919:android:248ea5edff80444085d202",
         "android_client_info": {
-          "package_name": "uas.geoconnect.pml"
+          "package_name": "com.geoconnect.app"
         }
       },
       "oauth_client": [
         {
           "client_id": "351198202919-uq5dbmdjunhphq5dm90dlvq4l1ck35el.apps.googleusercontent.com",
-          "client_type": 1
+          "client_type": 3
         }
       ],
       "api_key": [
@@ -29,6 +29,49 @@
             {
               "client_id": "351198202919-uq5dbmdjunhphq5dm90dlvq4l1ck35el.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "351198202919-gtf11n27rvbj8gdljk7dubaiu2iol2on.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.geoconnect.app"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:351198202919:android:b5089d2924acbd1385d202",
+        "android_client_info": {
+          "package_name": "uas.geoconnect.pml"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "351198202919-uq5dbmdjunhphq5dm90dlvq4l1ck35el.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYv-HvaHtEmowpicNyQpPUeImHdXdElaM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "351198202919-uq5dbmdjunhphq5dm90dlvq4l1ck35el.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "351198202919-gtf11n27rvbj8gdljk7dubaiu2iol2on.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.geoconnect.app"
+              }
             }
           ]
         }

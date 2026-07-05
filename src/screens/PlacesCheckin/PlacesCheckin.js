@@ -141,7 +141,7 @@ const getHtmlContent = (isDark) => {
         }
     </script>
 </head>
-<body class="bg-background dark:bg-inverse-surface text-on-background dark:text-inverse-on-surface font-body-md min-h-screen overflow-x-hidden">
+<body class="bg-background dark:bg-inverse-surface text-on-background dark:text-inverse-on-surface font-body-md h-screen w-screen overflow-hidden flex flex-col">
 <!-- Top Navigation Bar -->
 <header class="fixed top-0 w-full z-50 bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm">
 <nav class="flex justify-between items-center px-margin-page h-16 w-full">
@@ -157,7 +157,7 @@ const getHtmlContent = (isDark) => {
 </nav>
 </header>
 <!-- Main Content: Map-First Discovery Canvas -->
-<main class="pt-16 pb-20 md:pb-0 h-screen relative overflow-hidden">
+<main class="pt-16 pb-20 md:pb-0 flex-1 relative overflow-hidden w-full flex flex-col">
 <!-- Abstract Map Layer -->
 <div class="absolute inset-0 z-0 map-canvas flex items-center justify-center">
 <div class="relative w-full h-full opacity-40">
@@ -208,7 +208,7 @@ const getHtmlContent = (isDark) => {
 <!-- Places Sidebar -->
 <aside class="absolute left-4 right-4 lg:right-auto lg:w-80 top-60 bottom-24 lg:bottom-margin-page flex flex-col gap-4 z-10 bg-white/85 dark:bg-inverse-surface/85 backdrop-blur-md p-4 rounded-2xl border border-soft-border dark:border-white/10 overflow-hidden shadow-xl stagger-reveal" style="animation-delay: 0.2s;">
 <h3 class="text-headline-md font-headline-md text-on-surface-variant dark:text-inverse-on-surface">Nearby Places</h3>
-<div id="placesList" class="flex flex-col gap-4">
+<div id="placesList" class="flex-1 overflow-y-auto flex flex-col gap-4 pr-1 scroll-smooth pb-4">
         <div class="text-center text-muted-zinc py-8 delayed-fade">
         <span class="material-symbols-outlined animate-spin text-2xl">progress_activity</span>
         <p class="mt-2">Loading nearby spots...</p>
@@ -354,10 +354,12 @@ const getHtmlContent = (isDark) => {
             document.getElementById('detailCategory').innerText = place.category || 'Venue';
             document.getElementById('detailAddress').innerText = place.address || '';
             
-            const imgUrl = place.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
-            document.getElementById('detailImage1').src = imgUrl;
-            document.getElementById('detailImage2').src = imgUrl;
-            document.getElementById('detailImage3').src = imgUrl;
+            const imgUrl1 = place.images?.[0] || place.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
+            const imgUrl2 = place.images?.[1] || place.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
+            const imgUrl3 = place.images?.[2] || place.image || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=500';
+            document.getElementById('detailImage1').src = imgUrl1;
+            document.getElementById('detailImage2').src = imgUrl2;
+            document.getElementById('detailImage3').src = imgUrl3;
             
             document.getElementById('leaderboardList').innerHTML = '<div class="text-center text-muted-zinc py-4 delayed-fade"><span class="material-symbols-outlined animate-spin">progress_activity</span> Loading legends...</div>';
             

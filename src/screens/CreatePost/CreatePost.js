@@ -708,6 +708,7 @@ export default function CreatePost({ navigation }) {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.categoryTabsContainer}
             contentContainerStyle={styles.categoryTabs}
           >
             {PLACE_CATEGORIES.map((cat) => (
@@ -1130,10 +1131,14 @@ const styles = StyleSheet.create({
   },
 
   // Category Tabs
+  categoryTabsContainer: {
+    flexGrow: 0,
+  },
   categoryTabs: {
     paddingHorizontal: 20,
     paddingVertical: 12,
     gap: 8,
+    alignItems: 'center',
   },
   categoryTab: {
     paddingHorizontal: 18,

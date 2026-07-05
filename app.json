@@ -10,6 +10,7 @@
     "ios": {
       "supportsTabletMode": true,
       "bundleIdentifier": "com.geoconnect.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "config": {}
     },
     "android": {
@@ -18,6 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.geoconnect.app",
+      "googleServicesFile": "./google-services.json",
       "config": {},
       "permissions": [
         "ACCESS_COARSE_LOCATION",

@@ -10,9 +10,10 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
@@ -144,7 +145,21 @@ export default function ExploreMap({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const mapRef = useRef(null);
-  const sheetAnim = useRef(new Animated.Value(0)).current;
+  
+  // Snap positions for bottom sheet
+  const MIN_Y = 0; // Fully expanded
+  const MAX_Y = BOTTOM_SHEET_MAX - BOTTOM_SHEET_MIN; // Minimized/collapsed
+  
+  const sheetAnim = useRef(new Animated.Value(MAX_Y)).current;
+  const currentY = useRef(MAX_Y);
+
+  // Synchronize currentY ref with sheetAnim changes
+  useEffect(() => {
+    const id = sheetAnim.addListener(({ value }) => {
+      currentY.current = value;
+    });
+    return () => sheetAnim.removeListener(id);
+  }, [sheetAnim]);
 
   // Determine location
   const hasLocationPermission = locationPermission === 'granted';
@@ -180,15 +195,60 @@ export default function ExploreMap({ navigation }) {
 
   // Toggle bottom sheet
   const toggleSheet = useCallback(() => {
-    const toValue = sheetOpen ? 0 : 1;
+    const targetY = sheetOpen ? MAX_Y : MIN_Y;
     Animated.spring(sheetAnim, {
-      toValue,
+      toValue: targetY,
       useNativeDriver: true,
       tension: 65,
       friction: 11,
-    }).start();
-    setSheetOpen(!sheetOpen);
-  }, [sheetOpen, sheetAnim]);
+    }).start(() => {
+      setSheetOpen(targetY === MIN_Y);
+    });
+  }, [sheetOpen, sheetAnim, MIN_Y, MAX_Y]);
+
+  // Setup PanResponder for dragging the bottom sheet
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Handle drag when movement exceeds a minor threshold
+        return Math.abs(gestureState.dy) > 5;
+      },
+      onPanResponderGrant: () => {
+        sheetAnim.setOffset(currentY.current);
+        sheetAnim.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        const nextY = currentY.current + gestureState.dy;
+        if (nextY >= MIN_Y && nextY <= MAX_Y) {
+          sheetAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        sheetAnim.flattenOffset();
+
+        const threshold = (MIN_Y + MAX_Y) / 2;
+        let targetY = MAX_Y;
+
+        if (gestureState.vy < -0.5) {
+          targetY = MIN_Y; // Swiped up fast
+        } else if (gestureState.vy > 0.5) {
+          targetY = MAX_Y; // Swiped down fast
+        } else {
+          targetY = currentY.current < threshold ? MIN_Y : MAX_Y; // Snap to nearest
+        }
+
+        Animated.spring(sheetAnim, {
+          toValue: targetY,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }).start(() => {
+          setSheetOpen(targetY === MIN_Y);
+        });
+      },
+    })
+  ).current;
 
   // Subscribe to posts and events when location changes
   useEffect(() => {
@@ -299,11 +359,7 @@ export default function ExploreMap({ navigation }) {
     );
   }, [posts, searchQuery]);
 
-  // Bottom sheet translateY interpolation
-  const sheetTranslateY = sheetAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [BOTTOM_SHEET_MAX - BOTTOM_SHEET_MIN, 0],
-  });
+  // sheetAnim holds raw pixel translateY directly, no interpolation required.
 
   const renderPostItem = useCallback(({ item }) => (
     <PostCard post={item} onPress={handlePostPress} isDark={isDark} />
@@ -316,6 +372,7 @@ export default function ExploreMap({ navigation }) {
       {/* Google Maps */}
       <MapView
         key={mapTheme}
+        provider={PROVIDER_GOOGLE}
         ref={mapRef}
         style={styles.map}
         initialRegion={region}
@@ -402,13 +459,15 @@ export default function ExploreMap({ navigation }) {
         style={[
           styles.bottomSheet,
           isDark && styles.bottomSheetDark,
-          { transform: [{ translateY: sheetTranslateY }] },
+          { transform: [{ translateY: sheetAnim }] },
         ]}
       >
         {/* Drag Handle */}
-        <TouchableOpacity style={styles.sheetHandle} onPress={toggleSheet}>
-          <View style={[styles.sheetHandleBar, isDark && styles.sheetHandleBarDark]} />
-        </TouchableOpacity>
+        <View style={styles.sheetHandle} {...panResponder.panHandlers}>
+          <TouchableOpacity onPress={toggleSheet} style={{ paddingVertical: 4 }}>
+            <View style={[styles.sheetHandleBar, isDark && styles.sheetHandleBarDark]} />
+          </TouchableOpacity>
+        </View>
 
         {/* Sheet Header */}
         <View style={styles.sheetHeader}>
